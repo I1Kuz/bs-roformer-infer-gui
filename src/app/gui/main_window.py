@@ -8,7 +8,6 @@ from app.models.manager import ModelManager
 from app.inference.queue_manager import QueueManager
 from app.audio.scanner import scan_audio_files
 from app.gui.styles import apply_theme
-from app.gui.dialogs.setup_dialog import SetupDialog
 from app.gui.dialogs.model_selector import ModelSelectorDialog
 from app.gui.widgets.queue_panel import QueuePanel
 
@@ -17,7 +16,7 @@ class MainWindow(tk.Tk):
         super().__init__()
         self.title("(BS-RoFormer-Infer) Studio")
         self.geometry("900x800")
-        self.minsize(900, 800)
+        self.minsize(950, 850)
         
         # Set app icon
         from app.core.paths import get_resources_dir
@@ -56,14 +55,15 @@ class MainWindow(tk.Tk):
         
         center_frame = ttk.Frame(self.loading_frame)
         center_frame.place(relx=0.5, rely=0.5, anchor="center")
+        self.center_frame = center_frame
         
-        self.loading_pb = ttk.Progressbar(center_frame, mode="indeterminate", length=300)
+        self.loading_pb = ttk.Progressbar(self.center_frame, mode="indeterminate", length=300)
         self.loading_pb.pack(fill="x", pady=(0, 5))
         self.loading_pb.start(10)
         
         self.loading_lbl_var = tk.StringVar(value="Initializing...")
-        lbl = ttk.Label(center_frame, textvariable=self.loading_lbl_var, wraplength=300, justify="center")
-        lbl.pack()
+        self.loading_lbl = ttk.Label(self.center_frame, textvariable=self.loading_lbl_var, wraplength=400, justify="center")
+        self.loading_lbl.pack()
         
         self.after(100, self._startup_check)
         
@@ -84,15 +84,124 @@ class MainWindow(tk.Tk):
         
     def _on_env_checked(self, exists):
         if not exists:
-            self.loading_lbl_var.set("Running first-time setup...")
-            dlg = SetupDialog(self)
-            self.wait_window(dlg)
-            if not dlg.success:
-                from tkinter import messagebox
-                messagebox.showerror("Setup Failed", "Environment setup failed. Cannot continue.")
-                self.destroy()
-                return
-                
+            # Hide the loading spinner
+            self.loading_pb.stop()
+            self.loading_pb.pack_forget()
+            self.loading_lbl.pack_forget()
+            
+            # Show the Install prompt directly on the main window
+            self.setup_frame = ttk.Frame(self.center_frame)
+            self.setup_frame.pack(fill="both", expand=True)
+            
+            title_lbl = ttk.Label(
+                self.setup_frame,
+                text="First-Time Environment Setup",
+                font=("-size", 13, "-weight", "bold"),
+                justify="center"
+            )
+            title_lbl.pack(pady=(0, 8))
+            
+            desc_lbl = ttk.Label(
+                self.setup_frame,
+                text="BS-RoFormer requires PyTorch runtime and inference dependencies to be installed.",
+                justify="center",
+                wraplength=420
+            )
+            desc_lbl.pack(pady=(0, 16))
+            
+            self.btn_install = ttk.Button(
+                self.setup_frame,
+                text="Install",
+                style="Accent.TButton",
+                command=self._start_first_time_install,
+                width=16
+            )
+            self.btn_install.pack(pady=(0, 8))
+            
+            self.lbl_note = ttk.Label(
+                self.setup_frame,
+                text="Installation will take approximately 5 GB of disk space.",
+                font=("-size", 9),
+                foreground="gray",
+                justify="center"
+            )
+            self.lbl_note.pack(pady=(0, 5))
+        else:
+            self._start_background_init()
+            
+    def _start_first_time_install(self):
+        if hasattr(self, 'setup_frame') and self.setup_frame.winfo_exists():
+            self.setup_frame.destroy()
+            
+        # Display installation progress view directly in the main window
+        self.install_progress_frame = ttk.Frame(self.center_frame)
+        self.install_progress_frame.pack(fill="both", expand=True)
+        
+        self.install_title_lbl = ttk.Label(
+            self.install_progress_frame,
+            text="Installing PyTorch Environment...",
+            font=("-size", 12, "-weight", "bold"),
+            justify="center"
+        )
+        self.install_title_lbl.pack(pady=(0, 12))
+        
+        self.setup_pb_var = tk.DoubleVar(value=0)
+        self.setup_pb = ttk.Progressbar(
+            self.install_progress_frame,
+            variable=self.setup_pb_var,
+            maximum=100,
+            length=360
+        )
+        self.setup_pb.pack(fill="x", pady=(0, 10))
+        
+        self.setup_status_var = tk.StringVar(value="Starting installation...")
+        self.setup_status_lbl = ttk.Label(
+            self.install_progress_frame,
+            textvariable=self.setup_status_var,
+            font=("-size", 9),
+            foreground="gray",
+            justify="center"
+        )
+        self.setup_status_lbl.pack(pady=5)
+        
+        self.bootstrap = EnvironmentBootstrap(self._on_setup_progress, self._on_setup_done)
+        self.bootstrap.start_setup()
+        
+    def _on_setup_progress(self, percent: int, status: str):
+        self.after(0, self._update_setup_progress, percent, status)
+        
+    def _update_setup_progress(self, percent: int, status: str):
+        if hasattr(self, 'setup_pb_var'):
+            self.setup_pb_var.set(percent)
+        if hasattr(self, 'setup_status_var'):
+            self.setup_status_var.set(status)
+            
+    def _on_setup_done(self, success: bool, message: str):
+        self.after(0, self._update_setup_done, success, message)
+        
+    def _update_setup_done(self, success: bool, message: str):
+        if success:
+            if hasattr(self, 'install_progress_frame') and self.install_progress_frame.winfo_exists():
+                self.install_progress_frame.destroy()
+            self.loading_pb.pack(fill="x", pady=(0, 5))
+            self.loading_pb.start(10)
+            self.loading_lbl.pack()
+            self._start_background_init()
+        else:
+            if hasattr(self, 'install_title_lbl'):
+                self.install_title_lbl.config(text="Installation Failed")
+            if hasattr(self, 'setup_status_var'):
+                self.setup_status_var.set(f"Error: {message}")
+            btn_retry = ttk.Button(
+                self.install_progress_frame,
+                text="Retry",
+                style="Accent.TButton",
+                command=self._start_first_time_install,
+                width=12
+            )
+            btn_retry.pack(pady=10)
+            
+    def _start_background_init(self):
         # Run heavy init in background thread to prevent GUI freeze
         def background_init():
             self.after(0, lambda: self.loading_lbl_var.set("Starting inference worker process..."))

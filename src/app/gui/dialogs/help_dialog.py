@@ -11,12 +11,13 @@ class HelpDialog(tk.Toplevel):
         self.title("Help & Information")
         
         # Center the window on the parent
-        width, height = 700, 550
+        width, height = 700, 650
+
         parent.update_idletasks()
         x = parent.winfo_x() + (parent.winfo_width() - width) // 2
         y = parent.winfo_y() + (parent.winfo_height() - height) // 2
         self.geometry(f"{width}x{height}+{x}+{y}")
-        
+        self.maxsize(width, height)
         self.transient(parent)
         self.grab_set()
         

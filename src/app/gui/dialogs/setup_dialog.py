@@ -26,7 +26,8 @@ class SetupDialog(tk.Toplevel):
             y = (screen_h - height) // 2
             
         self.geometry(f"{width}x{height}+{x}+{y}")
-        
+        self.minsize(width, height)
+
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()

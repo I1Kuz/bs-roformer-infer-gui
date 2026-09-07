@@ -10,12 +10,14 @@ class ModelSelectorDialog(tk.Toplevel):
         self.title("Select Model")
         
         # Center the window on the parent
-        width, height = 800, 400
+        width, height = 800, 450
+        
         parent.update_idletasks()
         x = parent.winfo_x() + (parent.winfo_width() - width) // 2
         y = parent.winfo_y() + (parent.winfo_height() - height) // 2
         self.geometry(f"{width}x{height}+{x}+{y}")
-        
+        self.minsize(width, height)
+
         self.transient(parent)
         self.grab_set()
         

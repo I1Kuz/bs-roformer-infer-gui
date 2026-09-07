@@ -126,6 +126,37 @@ def handle_serve():
         def flush(self):
             self.original_stream.flush()
 
+    class SafeModelWrapper(torch.nn.Module):
+        """Ensures the model output tensor along time dimension matches the input chunk length."""
+        def __init__(self, inner):
+            super().__init__()
+            self._inner = inner
+            
+        def forward(self, part, *args, **kwargs):
+            expected_len = part.shape[-1]
+            out = self._inner(part, *args, **kwargs)
+            if isinstance(out, (list, tuple)):
+                res = out[0]
+                if torch.is_tensor(res):
+                    if res.shape[-1] < expected_len:
+                        res = torch.nn.functional.pad(res, (0, expected_len - res.shape[-1]))
+                    elif res.shape[-1] > expected_len:
+                        res = res[..., :expected_len]
+                return (res, *out[1:])
+            elif torch.is_tensor(out):
+                if out.shape[-1] < expected_len:
+                    out = torch.nn.functional.pad(out, (0, expected_len - out.shape[-1]))
+                elif out.shape[-1] > expected_len:
+                    out = out[..., :expected_len]
+                return out
+            return out
+            
+        def __getattr__(self, name):
+            try:
+                return super().__getattr__(name)
+            except AttributeError:
+                return getattr(self._inner, name)
+
     sys.stdout = ProgressStream(original_stderr)
     sys.stderr = sys.stdout
     
@@ -208,6 +239,7 @@ def handle_serve():
                 session_state['model'] = model
                 session_state['config'] = config
                 session_state['device'] = torch_device
+                session_state['vram_limit'] = vram_limit
                 
                 send_event("model_loaded", {"model_id": model_id, "status": "success"})
                 real_stdout.write(json.dumps({"id": req_id, "status": "success"}) + "\n")
@@ -242,40 +274,66 @@ def handle_serve():
                 
             # --- Apply config overrides ---
             import torch
-            chunk_size = 588800 # Default
-            if chunk_preset.startswith("Small"): chunk_size = 352800
-            elif chunk_preset.startswith("Medium"): chunk_size = 470400
-            elif chunk_preset.startswith("Big"): chunk_size = 588800
-            elif chunk_preset.startswith("Huge"): chunk_size = 705600
+            
+            # 1. Determine STFT hop length to ensure chunk_size is an exact multiple
+            hop = 512
+            if hasattr(config, 'model') and hasattr(config.model, 'stft_hop_length'):
+                hop = config.model.stft_hop_length
+            elif hasattr(config, 'audio') and hasattr(config.audio, 'hop_length'):
+                hop = config.audio.hop_length
+            elif hasattr(config, 'model') and hasattr(config.model, 'hop_length'):
+                hop = config.model.hop_length
+            elif hasattr(config, 'inference') and hasattr(config.inference, 'hop_length'):
+                hop = config.inference.hop_length
+
+            # 2. Get native model chunk size from config (defaults to 588800 = 1150 * 512 for BS-RoFormer)
+            native_chunk = 588800
+            if hasattr(config, 'inference') and hasattr(config.inference, 'chunk_size') and config.inference.chunk_size:
+                native_chunk = config.inference.chunk_size
+            elif hasattr(config, 'audio') and hasattr(config.audio, 'chunk_size') and config.audio.chunk_size:
+                native_chunk = config.audio.chunk_size
+            native_chunk = (native_chunk // hop) * hop
+
+            # 3. Resolve chunk size based on preset
+            if chunk_preset.startswith("Small"):
+                chunk_size = (352800 // hop) * hop
+            elif chunk_preset.startswith("Medium"):
+                chunk_size = (470400 // hop) * hop
+            elif chunk_preset.startswith("Big"):
+                chunk_size = native_chunk
+            elif chunk_preset.startswith("Huge"):
+                chunk_size = (705600 // hop) * hop
             elif chunk_preset == "Auto":
-                # Auto detect based on VRAM
+                # By default, use native chunk size (588800) for highest separation quality
+                chunk_size = native_chunk
+                
+                # Only downscale if GPU VRAM is low (< 5.5 GB) to prevent OOM
                 if torch.cuda.is_available():
                     total_memory = torch.cuda.get_device_properties(0).total_memory
                     gb = total_memory / (1024 ** 3)
-                    if gb >= 7.5: chunk_size = 705600
-                    elif gb >= 5.5: chunk_size = 588800
-                    elif gb >= 4.0: chunk_size = 470400
-                    else: chunk_size = 352800
-                    
+                    vram_lim = session_state.get('vram_limit', 0)
+                    if vram_lim > 0 and vram_lim < gb:
+                        gb = float(vram_lim)
+                        
+                    if gb < 4.0:
+                        chunk_size = (352800 // hop) * hop
+                    elif gb < 5.5:
+                        chunk_size = (470400 // hop) * hop
+            else:
+                chunk_size = native_chunk
+
             if hasattr(config, 'inference'):
-                if hasattr(config.inference, 'dim_t') and hasattr(config.model, 'stft_hop_length'):
-                    hop = config.model.stft_hop_length
-                    # For original bs-roformer inference dim_t is used: chunk_size = dim_t * hop
-                    # We will override chunk_size to be exactly a multiple of hop length
-                    chunk_size = (chunk_size // hop) * hop
-                    config.inference.dim_t = chunk_size // hop
-                    config.inference.chunk_size = chunk_size
-                else:
-                    config.inference.chunk_size = chunk_size
+                config.inference.chunk_size = chunk_size
                 config.inference.num_overlap = overlap
-                
+                if hasattr(config.inference, 'dim_t') and hop:
+                    config.inference.dim_t = chunk_size // hop
+                    
             if hasattr(config, 'audio'):
-                if hasattr(config.audio, 'hop_length'):
-                    hop = config.audio.hop_length
-                    chunk_size = (chunk_size // hop) * hop
-                    config.audio.chunk_size = chunk_size
-                else:
-                    config.audio.chunk_size = chunk_size
+                config.audio.chunk_size = chunk_size
+                if hasattr(config.audio, 'dim_t') and hop:
+                    config.audio.dim_t = chunk_size // hop
+                if hasattr(config.audio, 'num_overlap'):
+                    config.audio.num_overlap = overlap
             # ------------------------------
                 
             try:
@@ -294,7 +352,8 @@ def handle_serve():
                     
                 mixture = torch.tensor(mix.T, dtype=torch.float32)
                 
-                res, _ = demix_track(config, model, mixture, torch_device, None)
+                safe_model = SafeModelWrapper(model)
+                res, _ = demix_track(config, safe_model, mixture, torch_device, None)
                 
                 instruments = config.training.instruments
                 if getattr(config.training, "target_instrument", None) is not None:
