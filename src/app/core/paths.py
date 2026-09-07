@@ -2,6 +2,7 @@ import os
 import sys
 from pathlib import Path
 
+
 def get_app_data_dir() -> Path:
     """Returns the writable application data directory."""
     # On Windows, use LOCALAPPDATA
@@ -11,7 +12,7 @@ def get_app_data_dir() -> Path:
     else:
         # Fallback for non-Windows or if env var is missing
         base_dir = Path.home() / ".bsroformer_studio"
-    
+
     return base_dir
 
 def get_runtime_dir() -> Path:
@@ -32,7 +33,7 @@ def get_temp_dir() -> Path:
 def get_history_dir() -> Path:
     return get_app_data_dir() / "history"
 
-def ensure_directories():
+def ensure_directories() -> None:
     """Creates all necessary writable directories."""
     dirs = [
         get_app_data_dir(),
@@ -48,24 +49,21 @@ def ensure_directories():
 
 def get_application_dir() -> Path:
     """Returns the directory where the application executable/script is located."""
-    if getattr(sys, 'frozen', False):
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        # But we want the directory of the actual .exe
+    if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
-    else:
-        # Running from source
-        return Path(__file__).resolve().parent.parent.parent.parent
+    return Path(__file__).resolve().parent.parent.parent.parent
 
 def get_resources_dir() -> Path:
     """Returns the resources directory (icons, themes)."""
-    if getattr(sys, 'frozen', False):
-        return Path(sys._MEIPASS) / "resources"
-    else:
-        return get_application_dir() / "resources"
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", "")
+        return Path(meipass) / "resources"
+    return get_application_dir() / "resources"
 
 def get_worker_script_path() -> Path:
     """Returns the absolute path to worker_process.py, handling PyInstaller packaging."""
-    if getattr(sys, 'frozen', False):
-        return Path(sys._MEIPASS) / "app" / "inference" / "worker_process.py"
-    else:
-        return get_application_dir() / "src" / "app" / "inference" / "worker_process.py"
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", "")
+        return Path(meipass) / "app" / "inference" / "worker_process.py"
+    return get_application_dir() / "src" / "app" / "inference" / "worker_process.py"
+

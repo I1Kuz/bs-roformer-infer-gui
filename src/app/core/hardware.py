@@ -1,59 +1,83 @@
-import subprocess
 import json
-from app.core.paths import get_runtime_dir
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+
 from app.core.logging import get_logger
+from app.core.paths import get_runtime_dir
 
 logger = get_logger(__name__)
 
-class HardwareDetector:
-    def __init__(self):
-        self.python_exe = get_runtime_dir() / "python.exe"
-        self.cuda_available = False
-        self.gpu_name = "Unknown"
-        self.vram_gb = 0.0
 
-    def detect(self):
+@dataclass(slots=True)
+class HardwareInfo:
+    cuda_available: bool = False
+    gpu_name: str = "Unknown"
+    vram_gb: float = 0.0
+
+
+class HardwareDetector:
+    def __init__(self) -> None:
+        self.python_exe: Path = get_runtime_dir() / "python.exe"
+        self.info: HardwareInfo = HardwareInfo()
+
+    @property
+    def cuda_available(self) -> bool:
+        return self.info.cuda_available
+
+    @property
+    def gpu_name(self) -> str:
+        return self.info.gpu_name
+
+    @property
+    def vram_gb(self) -> float:
+        return self.info.vram_gb
+
+    def detect(self) -> HardwareInfo:
         if not self.python_exe.exists():
             logger.warning("Python runtime not found. Cannot detect PyTorch hardware.")
-            return
+            return self.info
 
-        script = """
-import torch
-info = {
-    'cuda_available': torch.cuda.is_available(),
-    'gpu_name': 'Unknown',
-    'vram_gb': 0.0
-}
-if info['cuda_available']:
-    try:
-        info['gpu_name'] = torch.cuda.get_device_name(0)
-        vram = torch.cuda.get_device_properties(0).total_memory
-        info['vram_gb'] = vram / (1024**3)
-    except Exception:
-        pass
-import json
-print(json.dumps(info))
-"""
+        script = (
+            "import json, torch\n"
+            "info = {'cuda_available': torch.cuda.is_available(), 'gpu_name': 'Unknown', 'vram_gb': 0.0}\n"
+            "if info['cuda_available']:\n"
+            "    try:\n"
+            "        info['gpu_name'] = torch.cuda.get_device_name(0)\n"
+            "        info['vram_gb'] = torch.cuda.get_device_properties(0).total_memory / (1024**3)\n"
+            "    except Exception:\n"
+            "        pass\n"
+            "print(json.dumps(info))\n"
+        )
         try:
             result = subprocess.run(
                 [str(self.python_exe), "-c", script],
                 capture_output=True,
                 text=True,
-                creationflags=subprocess.CREATE_NO_WINDOW
+                check=False,
+                creationflags=subprocess.CREATE_NO_WINDOW,
             )
             if result.returncode == 0:
                 data = json.loads(result.stdout.strip())
-                self.cuda_available = data.get('cuda_available', False)
-                self.gpu_name = data.get('gpu_name', 'Unknown')
-                self.vram_gb = data.get('vram_gb', 0.0)
-                logger.info(f"Hardware detected: CUDA={self.cuda_available}, GPU={self.gpu_name}, VRAM={self.vram_gb:.1f}GB")
+                self.info = HardwareInfo(
+                    cuda_available=bool(data.get("cuda_available", False)),
+                    gpu_name=str(data.get("gpu_name", "Unknown")),
+                    vram_gb=float(data.get("vram_gb", 0.0)),
+                )
+                logger.info(
+                    "Hardware detected: CUDA=%s, GPU=%s, VRAM=%.1f GB",
+                    self.info.cuda_available,
+                    self.info.gpu_name,
+                    self.info.vram_gb,
+                )
             else:
-                logger.error(f"Hardware detection failed: {result.stderr}")
+                logger.error("Hardware detection process failed with code %d: %s", result.returncode, result.stderr.strip())
         except Exception as e:
-            logger.error(f"Error running hardware detection: {e}")
+            logger.error("Error executing hardware detection: %s", e)
+
+        return self.info
 
     def get_display_string(self) -> str:
-        if self.cuda_available:
-            return f"GPU: {self.gpu_name} (VRAM: {self.vram_gb:.1f} GB)"
-        else:
-            return "GPU: CPU Only (CUDA not available)"
+        if self.info.cuda_available:
+            return f"GPU: {self.info.gpu_name} (VRAM: {self.info.vram_gb:.1f} GB)"
+        return "GPU: CPU Only (CUDA not available)"

@@ -1,12 +1,15 @@
 import json
-from dataclasses import dataclass, asdict
-from typing import Optional
-from app.core.paths import get_settings_dir
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import cast, final
+
 from app.core.logging import get_logger
+from app.core.paths import get_settings_dir
 
 logger = get_logger(__name__)
 
-@dataclass
+
+@dataclass(slots=True)
 class AppSettings:
     input_folder: str = ""
     output_folder: str = ""
@@ -21,33 +24,36 @@ class AppSettings:
     overwrite_existing: bool = False
     theme: str = "dark"
 
+
+@final
 class SettingsManager:
-    def __init__(self):
-        self.settings_file = get_settings_dir() / "settings.json"
-        self.settings = AppSettings()
+    def __init__(self) -> None:
+        self.settings_file: Path = get_settings_dir() / "settings.json"
+        self.settings: AppSettings = AppSettings()
         self.load()
 
-    def load(self):
+    def load(self) -> None:
         if self.settings_file.exists():
             try:
-                with open(self.settings_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    # Update fields that exist in AppSettings
-                    for key, value in data.items():
+                with open(self.settings_file, encoding="utf-8") as f:
+                    raw_data: object = json.load(f)
+                if isinstance(raw_data, dict):
+                    raw_dict = cast(dict[str, object], raw_data)
+                    for key, value in raw_dict.items():
                         if hasattr(self.settings, key):
                             setattr(self.settings, key, value)
-                logger.info("Settings loaded successfully.")
+                logger.info("Settings loaded successfully")
             except Exception as e:
-                logger.error(f"Failed to load settings: {e}")
+                logger.error("Failed to load settings: %s", e)
         else:
-            logger.info("No settings file found. Using defaults.")
+            logger.info("No settings file found, using defaults")
             self.save()
 
-    def save(self):
+    def save(self) -> None:
         try:
             self.settings_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.settings_file, 'w', encoding='utf-8') as f:
+            with open(self.settings_file, "w", encoding="utf-8") as f:
                 json.dump(asdict(self.settings), f, indent=4)
-            logger.info("Settings saved successfully.")
+            logger.info("Settings saved successfully")
         except Exception as e:
-            logger.error(f"Failed to save settings: {e}")
+            logger.error("Failed to save settings: %s", e)
