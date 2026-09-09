@@ -102,7 +102,7 @@ class QueueManager:
         self.is_running = True
         self.current_job = next_job
         self.current_job.status = JobStatus.PROCESSING
-        self.on_job_updated(self.current_job)
+        self._schedule_ui_update(self.current_job)
 
         if self.loaded_model_id != self.current_job.model_id:
             logger.info("Loading model %s for job %s", self.current_job.model_id, self.current_job.id)

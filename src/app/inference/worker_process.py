@@ -378,21 +378,28 @@ def handle_serve() -> None:
                     out_dir: Path = store_dir,
                     in_stem: str = input_file.stem,
                 ) -> None:
-                    out_path = out_dir / f"{in_stem}_{name_suffix}"
                     fmt = fmt_choice.upper()
+                    base_filename = f"{in_stem}_{name_suffix}"
                     if "MP3" in fmt:
-                        temp_wav = out_path.with_suffix('.temp.wav')
+                        temp_wav = out_dir / f"{base_filename}.temp.wav"
+                        final_mp3 = out_dir / f"{base_filename}.mp3"
                         sf.write(temp_wav, data, sample_rate, subtype="FLOAT")
-                        _ = subprocess.run(["ffmpeg", "-y", "-i", str(temp_wav), "-b:a", "320k", str(out_path.with_suffix(".mp3"))], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                        os.remove(temp_wav)
+                        _ = subprocess.run(
+                            ["ffmpeg", "-y", "-i", str(temp_wav), "-b:a", "320k", str(final_mp3)],
+                            check=True,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                        )
+                        if temp_wav.exists():
+                            os.remove(temp_wav)
                     elif "FLAC" in fmt:
-                        sf.write(out_path.with_suffix(".flac"), data, sample_rate, format="FLAC")
+                        sf.write(out_dir / f"{base_filename}.flac", data, sample_rate, format="FLAC")
                     elif "16-BIT" in fmt:
-                        sf.write(out_path.with_suffix(".wav"), data, sample_rate, subtype="PCM_16")
+                        sf.write(out_dir / f"{base_filename}.wav", data, sample_rate, subtype="PCM_16")
                     elif "24-BIT" in fmt:
-                        sf.write(out_path.with_suffix(".wav"), data, sample_rate, subtype="PCM_24")
+                        sf.write(out_dir / f"{base_filename}.wav", data, sample_rate, subtype="PCM_24")
                     else:
-                        sf.write(out_path.with_suffix(".wav"), data, sample_rate, subtype="FLOAT")
+                        sf.write(out_dir / f"{base_filename}.wav", data, sample_rate, subtype="FLOAT")
 
                 for instr in instruments:
                     vocals_output = res[instr].T
