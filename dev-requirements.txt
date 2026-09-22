@@ -1,0 +1,5 @@
+sv-ttk
+pywinstyles
+pyinstaller
+basedpyright
+ruff

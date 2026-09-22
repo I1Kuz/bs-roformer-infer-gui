@@ -1,1 +1,0 @@
-https://github.com/openmirlab/bs-roformer-infer.git
