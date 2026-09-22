@@ -5,6 +5,9 @@ description = "BS-RoFormer Infer Studio GUI"
 readme = "README.md"
 requires-python = ">=3.12"
 
+[project.scripts]
+bs-roformer-studio = "app.main:main"
+
 [tool.ruff]
 target-version = "py312"
 line-length = 120
@@ -23,9 +26,9 @@ select = [
     "LOG",  # flake8-logging
 ]
 ignore = [
-    "E501",  # Line too long (handled by formatter / readability)
+    "E501",   # Line too long (handled by formatter / readability)
     "SIM108", # Use ternary operator instead of if-else (clarity preference)
-    "B009",  # Constant getattr for tkinter overload resolution
+    "B009",   # Constant getattr for tkinter overload resolution
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -33,17 +36,6 @@ ignore = [
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
-
-[tool.mypy]
-python_version = "3.12"
-mypy_path = ["src"]
-explicit_package_bases = true
-ignore_missing_imports = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-check_untyped_defs = true
-no_implicit_optional = true
-show_error_codes = true
 
 [tool.basedpyright]
 typeCheckingMode = "strict"
@@ -59,15 +51,13 @@ venv = ".venv"
 extraPaths = [
     "src",
     "bs-roformer-infer/src",
-    "C:/Users/user/AppData/Local/BSRoFormer Studio/runtime/Lib/site-packages"
 ]
 include = [
     "src/app",
-    "bs-roformer-infer/src/bs_roformer/clean_api.py"
 ]
 exclude = [
     "**/tests/**",
     "**/.venv/**",
-    "**/__pycache__/**"
+    "**/__pycache__/**",
+    "bs-roformer-infer/**",
 ]
-
