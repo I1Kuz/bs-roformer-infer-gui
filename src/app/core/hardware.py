@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import cast, final
 
 from app.core.logging import get_logger
-from app.core.paths import get_runtime_dir
+from app.core.paths import get_python_exe
 
 logger = get_logger(__name__)
 
@@ -38,7 +38,7 @@ class HardwareInfo:
 @final
 class HardwareDetector:
     def __init__(self) -> None:
-        self.python_exe: Path = get_runtime_dir() / "python.exe"
+        self.python_exe: Path = get_python_exe()
         self.info: HardwareInfo = HardwareInfo()
 
     @property

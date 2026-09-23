@@ -15,9 +15,6 @@ def get_app_data_dir() -> Path:
     return Path.home() / ".bsroformer_studio"
 
 
-def get_runtime_dir() -> Path:
-    return get_app_data_dir() / "runtime"
-
 
 def get_models_dir() -> Path:
     return get_app_data_dir() / "models"
@@ -43,7 +40,6 @@ def ensure_directories() -> None:
     """Creates all necessary writable directories."""
     dirs = [
         get_app_data_dir(),
-        get_runtime_dir(),
         get_models_dir(),
         get_settings_dir(),
         get_logs_dir(),
@@ -57,13 +53,49 @@ def ensure_directories() -> None:
 def get_application_dir() -> Path:
     """Returns the directory where the application executable/script is located.
 
-    In production the app is distributed as a PyInstaller .exe — this branch
-    returns the directory containing that executable.
+    In production the app is distributed as an installed application or PyInstaller .exe —
+    this returns the directory containing that executable.
     In development (running from source) it returns the repository root.
     """
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
     return Path(__file__).resolve().parent.parent.parent.parent
+
+
+def get_src_dir() -> Path:
+    """Returns the directory containing the 'app' package root."""
+    if getattr(sys, "frozen", False):
+        meipass: str = getattr(sys, "_MEIPASS", ".")
+        candidate = Path(meipass)
+        if (candidate / "app").exists():
+            return candidate
+        if (candidate / "_internal" / "app").exists():
+            return candidate / "_internal"
+        app_dir = get_application_dir()
+        if (app_dir / "app").exists():
+            return app_dir
+        if (app_dir / "_internal" / "app").exists():
+            return app_dir / "_internal"
+        return app_dir / "src"
+    return get_application_dir() / "src"
+
+
+def get_python_exe() -> Path:
+    """Returns the Python executable to run the worker process.
+
+    1. In an installed Inno Setup distribution, prefers {app}/runtime/python.exe.
+    2. In user AppData runtime (if installed previously with CUDA support).
+    3. Otherwise (in development or virtualenv), uses the current sys.executable.
+    """
+    installed_runtime = get_application_dir() / "runtime" / "python.exe"
+    if installed_runtime.exists():
+        return installed_runtime
+
+    appdata_runtime = get_app_data_dir() / "runtime" / "python.exe"
+    if appdata_runtime.exists():
+        return appdata_runtime
+
+    return Path(sys.executable)
 
 
 def get_resources_dir() -> Path:
@@ -76,7 +108,4 @@ def get_resources_dir() -> Path:
 
 def get_worker_script_path() -> Path:
     """Returns the absolute path to worker_process.py, handling PyInstaller packaging."""
-    if getattr(sys, "frozen", False):
-        meipass: str = getattr(sys, "_MEIPASS", ".")
-        return Path(meipass) / "app" / "inference" / "worker_process.py"
-    return get_application_dir() / "src" / "app" / "inference" / "worker_process.py"
+    return get_src_dir() / "app" / "inference" / "worker_process.py"

@@ -21,14 +21,6 @@ class LoadingTranslations:
 
 @final
 @dataclass(frozen=True, slots=True)
-class SetupTranslations:
-    install_failed: str
-    error_prefix: str
-    retry: str
-
-
-@final
-@dataclass(frozen=True, slots=True)
 class FoldersTranslations:
     frame_title: str
     input_folder: str
@@ -124,7 +116,6 @@ class HelpDialogTranslations:
 class AppTranslations:
     app_title: str
     loading: LoadingTranslations
-    setup: SetupTranslations
     folders: FoldersTranslations
     model: ModelTranslations
     settings: SettingsTranslations
@@ -199,11 +190,6 @@ _EN_TRANSLATIONS = AppTranslations(
         detecting_hw="Detecting hardware capabilities...",
         fetching_registry="Fetching model registry...",
         worker_start_failed="Failed to start background worker process.",
-    ),
-    setup=SetupTranslations(
-        install_failed="Installation Failed",
-        error_prefix="Error: ",
-        retry="Retry",
     ),
     folders=FoldersTranslations(
         frame_title="Folders",
@@ -287,11 +273,6 @@ _UK_TRANSLATIONS = AppTranslations(
         detecting_hw="Визначення характеристик обладнання...",
         fetching_registry="Отримання списку моделей...",
         worker_start_failed="Не вдалося запустити фоновий процес обробки.",
-    ),
-    setup=SetupTranslations(
-        install_failed="Помилка встановлення",
-        error_prefix="Помилка: ",
-        retry="Повторити",
     ),
     folders=FoldersTranslations(
         frame_title="Папки",

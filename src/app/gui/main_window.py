@@ -5,7 +5,6 @@ from tkinter import filedialog, messagebox, ttk
 from typing import final
 
 from app.audio.scanner import scan_audio_files
-from app.core.bootstrap import EnvironmentBootstrap
 from app.core.hardware import HardwareDetector
 from app.core.i18n import (
     LANGUAGE_DISPLAY_NAMES,
@@ -75,16 +74,7 @@ class MainWindow(tk.Tk):
         )
         self.loading_lbl.pack()
 
-        # Optional widgets created during first-time install flow
-        self.setup_frame: ttk.Frame | None = None
-        self.install_progress_frame: ttk.Frame | None = None
-        self.setup_pb_var: tk.DoubleVar | None = None
-        self.setup_pb: ttk.Progressbar | None = None
-        self.setup_status_var: tk.StringVar | None = None
-        self.install_title_lbl: ttk.Label | None = None
-        self.bootstrap: EnvironmentBootstrap | None = None
-
-        _ = self.after(100, self._startup_check)
+        _ = self.after(100, self._start_background_init)
 
     # ------------------------------------------------------------------
     # Queue polling
@@ -97,128 +87,6 @@ class MainWindow(tk.Tk):
     # ------------------------------------------------------------------
     # Startup sequence
     # ------------------------------------------------------------------
-
-    def _startup_check(self) -> None:
-        def check_env_bg() -> None:
-            t = get_translations()
-            _ = self.after(0, lambda: self.loading_lbl_var.set(t.loading.checking_env))
-            bs = EnvironmentBootstrap(lambda p, s: None, lambda s, m: None)
-            exists = bs.check_environment_exists()
-            _ = self.after(0, lambda: self._on_env_checked(exists))
-
-        threading.Thread(target=check_env_bg, daemon=True).start()
-
-    def _on_env_checked(self, exists: bool) -> None:
-        if not exists:
-            self.loading_pb.stop()
-            self.loading_pb.pack_forget()
-            self.loading_lbl.pack_forget()
-
-            self.setup_frame = ttk.Frame(self.center_frame)
-            self.setup_frame.pack(fill="both", expand=True)
-
-            ttk.Label(
-                self.setup_frame,
-                text="First-Time Environment Setup",
-                font=("TkDefaultFont", 13, "bold"),
-                justify="center",
-            ).pack(pady=(0, 8))
-
-            ttk.Label(
-                self.setup_frame,
-                text="BS-RoFormer requires PyTorch runtime and inference dependencies to be installed.",
-                justify="center",
-                wraplength=420,
-            ).pack(pady=(0, 16))
-
-            ttk.Button(
-                self.setup_frame,
-                text="Install",
-                style="Accent.TButton",
-                command=self._start_first_time_install,
-                width=16,
-            ).pack(pady=(0, 8))
-
-            ttk.Label(
-                self.setup_frame,
-                text="Installation will take approximately 5 GB of disk space.",
-                font=("TkDefaultFont", 9),
-                foreground="gray",
-                justify="center",
-            ).pack(pady=(0, 5))
-        else:
-            self._start_background_init()
-
-    def _start_first_time_install(self) -> None:
-        if self.setup_frame and self.setup_frame.winfo_exists():
-            self.setup_frame.destroy()
-
-        self.install_progress_frame = ttk.Frame(self.center_frame)
-        self.install_progress_frame.pack(fill="both", expand=True)
-
-        self.install_title_lbl = ttk.Label(
-            self.install_progress_frame,
-            text="Installing PyTorch Environment...",
-            font=("TkDefaultFont", 12, "bold"),
-            justify="center",
-        )
-        self.install_title_lbl.pack(pady=(0, 12))
-
-        self.setup_pb_var = tk.DoubleVar(value=0)
-        self.setup_pb = ttk.Progressbar(
-            self.install_progress_frame,
-            variable=self.setup_pb_var,
-            maximum=100,
-            length=360,
-        )
-        self.setup_pb.pack(fill="x", pady=(0, 10))
-
-        self.setup_status_var = tk.StringVar(value="Starting installation...")
-        ttk.Label(
-            self.install_progress_frame,
-            textvariable=self.setup_status_var,
-            font=("TkDefaultFont", 9),
-            foreground="gray",
-            justify="center",
-        ).pack(pady=5)
-
-        self.bootstrap = EnvironmentBootstrap(self._on_setup_progress, self._on_setup_done)
-        self.bootstrap.start_setup()
-
-    def _on_setup_progress(self, percent: int, status: str) -> None:
-        _ = self.after(0, self._update_setup_progress, percent, status)
-
-    def _update_setup_progress(self, percent: int, status: str) -> None:
-        if self.setup_pb_var is not None:
-            self.setup_pb_var.set(percent)
-        if self.setup_status_var is not None:
-            self.setup_status_var.set(status)
-
-    def _on_setup_done(self, success: bool, message: str) -> None:
-        _ = self.after(0, self._update_setup_done, success, message)
-
-    def _update_setup_done(self, success: bool, message: str) -> None:
-        if success:
-            if self.install_progress_frame and self.install_progress_frame.winfo_exists():
-                self.install_progress_frame.destroy()
-            self.loading_pb.pack(fill="x", pady=(0, 5))
-            self.loading_pb.start(10)
-            self.loading_lbl.pack()
-            self._start_background_init()
-        else:
-            t = get_translations()
-            if self.install_title_lbl is not None:
-                _ = self.install_title_lbl.config(text=t.setup.install_failed)
-            if self.setup_status_var is not None:
-                self.setup_status_var.set(f"{t.setup.error_prefix}{message}")
-            if self.install_progress_frame:
-                ttk.Button(
-                    self.install_progress_frame,
-                    text=t.setup.retry,
-                    style="Accent.TButton",
-                    command=self._start_first_time_install,
-                    width=12,
-                ).pack(pady=10)
 
     def _start_background_init(self) -> None:
         def background_init() -> None:
@@ -237,7 +105,7 @@ class MainWindow(tk.Tk):
     def _on_startup_complete(self, success: bool) -> None:
         t = get_translations()
         if not success:
-            _ = messagebox.showerror(t.setup.install_failed, t.loading.worker_start_failed)
+            _ = messagebox.showerror(t.app_title, t.loading.worker_start_failed)
             self.destroy()
             return
 

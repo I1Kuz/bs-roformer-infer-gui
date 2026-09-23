@@ -36,6 +36,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "src/app/main.py" = ["E402"]
+"src/app/inference/worker_process.py" = ["E402"]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true

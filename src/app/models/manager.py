@@ -1,11 +1,12 @@
 import json
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast, final
 
 from app.core.logging import get_logger
-from app.core.paths import get_runtime_dir, get_worker_script_path
+from app.core.paths import get_python_exe, get_src_dir, get_worker_script_path
 
 logger = get_logger(__name__)
 
@@ -23,8 +24,8 @@ class ModelMetadata:
 @final
 class ModelManager:
     def __init__(self) -> None:
-        self.python_exe: Path = get_runtime_dir() / "python.exe"
-        self.worker_script: Path = get_worker_script_path()
+        self.python_exe: Path = get_python_exe()
+        self.src_dir: Path = get_src_dir()
         self.models: dict[str, ModelMetadata] = {}
 
     def fetch_registry(self) -> bool:
@@ -33,12 +34,17 @@ class ModelManager:
             return False
 
         try:
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(self.src_dir)
+
             result = subprocess.run(
-                [str(self.python_exe), str(self.worker_script), "--registry"],
+                [str(self.python_exe), str(get_worker_script_path()), "--registry"],
                 capture_output=True,
                 text=True,
                 check=False,
                 creationflags=subprocess.CREATE_NO_WINDOW,
+                cwd=str(self.src_dir),
+                env=env,
             )
 
             if result.returncode != 0:

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, cast, final
 
 from app.core.logging import get_logger
-from app.core.paths import get_runtime_dir, get_worker_script_path
+from app.core.paths import get_python_exe, get_src_dir, get_worker_script_path
 from app.inference.job import InferCommand, LoadModelCommand
 from app.inference.protocol import RpcStatus, WorkerCommand
 
@@ -40,21 +40,22 @@ class WorkerClient:
         self.pending_requests: dict[str, Callable[[WorkerResponse], None]] = {}
         self.lock: threading.Lock = threading.Lock()
         self.running: bool = False
-        self.python_exe: Path = get_runtime_dir() / "python.exe"
-        self.worker_script: Path = get_worker_script_path()
+        self.python_exe: Path = get_python_exe()
+        self.src_dir: Path = get_src_dir()
 
     def start(self) -> bool:
         if not self.python_exe.exists():
             logger.error("Python runtime not found. Cannot start worker.")
             return False
 
-        logger.info("Starting worker process: %s", self.worker_script)
+        logger.info("Starting worker process using Python: %s", self.python_exe)
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
         env["PYTHONUNBUFFERED"] = "1"
+        env["PYTHONPATH"] = str(self.src_dir)
 
         self.process = subprocess.Popen(
-            [str(self.python_exe), str(self.worker_script), "--serve"],
+            [str(self.python_exe), str(get_worker_script_path()), "--serve"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -62,6 +63,7 @@ class WorkerClient:
             bufsize=1,
             encoding="utf-8",
             creationflags=subprocess.CREATE_NO_WINDOW,
+            cwd=str(self.src_dir),
             env=env,
         )
         self.running = True

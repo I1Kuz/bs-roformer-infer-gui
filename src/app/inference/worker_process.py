@@ -16,6 +16,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, final
 
+# Ensure src/ is in sys.path so 'app.*' imports work across all Python runtimes
+_src_dir = Path(__file__).resolve().parent.parent.parent
+if str(_src_dir) not in sys.path:
+    sys.path.insert(0, str(_src_dir))
+
 from app.inference.protocol import (
     AudioExportFormat,
     ProgressType,
@@ -288,7 +293,7 @@ def _handle_load(req: dict[str, Any], real_stdout: Any, session: SessionState) -
         model = get_model_from_config("bs_roformer", config)
 
         try:
-            model.load_state_dict(torch.load(ckpt_path, map_location=torch.device("cpu"), weights_only=False))
+            _ = model.load_state_dict(torch.load(ckpt_path, map_location=torch.device("cpu"), weights_only=False))
         except Exception as load_err:
             err_str = str(load_err).lower()
             if "zip archive" in err_str or "corrupt" in err_str or "invalid" in err_str:
@@ -307,7 +312,7 @@ def _handle_load(req: dict[str, Any], real_stdout: Any, session: SessionState) -
             torch_device = torch.device(device_str)
 
         model = model.to(torch_device)
-        model.eval()
+        _ = model.eval()
 
         session.model = model
         session.config = config
