@@ -1,12 +1,31 @@
 import json
 import subprocess
+import textwrap
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast, final
 
 from app.core.logging import get_logger
 from app.core.paths import get_runtime_dir
 
 logger = get_logger(__name__)
+
+
+# any chance to type it?
+_DETECT_SCRIPT = textwrap.dedent("""\
+    import json
+    import torch
+
+    info = {"cuda_available": torch.cuda.is_available(), "gpu_name": "Unknown", "vram_gb": 0.0}
+    if info["cuda_available"]:
+        try:
+            info["gpu_name"] = torch.cuda.get_device_name(0)
+            info["vram_gb"] = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+        except Exception:
+            pass
+    print(json.dumps(info))
+""")
+
 
 
 @dataclass(slots=True)
@@ -16,6 +35,7 @@ class HardwareInfo:
     vram_gb: float = 0.0
 
 
+@final
 class HardwareDetector:
     def __init__(self) -> None:
         self.python_exe: Path = get_runtime_dir() / "python.exe"
@@ -38,32 +58,23 @@ class HardwareDetector:
             logger.warning("Python runtime not found. Cannot detect PyTorch hardware.")
             return self.info
 
-        script = (
-            "import json, torch\n"
-            "info = {'cuda_available': torch.cuda.is_available(), 'gpu_name': 'Unknown', 'vram_gb': 0.0}\n"
-            "if info['cuda_available']:\n"
-            "    try:\n"
-            "        info['gpu_name'] = torch.cuda.get_device_name(0)\n"
-            "        info['vram_gb'] = torch.cuda.get_device_properties(0).total_memory / (1024**3)\n"
-            "    except Exception:\n"
-            "        pass\n"
-            "print(json.dumps(info))\n"
-        )
         try:
             result = subprocess.run(
-                [str(self.python_exe), "-c", script],
+                [str(self.python_exe), "-c", _DETECT_SCRIPT],
                 capture_output=True,
                 text=True,
                 check=False,
                 creationflags=subprocess.CREATE_NO_WINDOW,
             )
             if result.returncode == 0:
-                data = json.loads(result.stdout.strip())
-                self.info = HardwareInfo(
-                    cuda_available=bool(data.get("cuda_available", False)),
-                    gpu_name=str(data.get("gpu_name", "Unknown")),
-                    vram_gb=float(data.get("vram_gb", 0.0)),
-                )
+                raw: object = json.loads(result.stdout.strip())
+                if isinstance(raw, dict):
+                    data = cast(dict[str, object], raw)
+                    self.info = HardwareInfo(
+                        cuda_available=bool(data.get("cuda_available", False)),
+                        gpu_name=str(data.get("gpu_name", "Unknown")),
+                        vram_gb=float(data.get("vram_gb", 0.0)),  # type: ignore[arg-type]
+                    )
                 logger.info(
                     "Hardware detected: CUDA=%s, GPU=%s, VRAM=%.1f GB",
                     self.info.cuda_available,
@@ -71,7 +82,11 @@ class HardwareDetector:
                     self.info.vram_gb,
                 )
             else:
-                logger.error("Hardware detection process failed with code %d: %s", result.returncode, result.stderr.strip())
+                logger.error(
+                    "Hardware detection process failed with code %d: %s",
+                    result.returncode,
+                    result.stderr.strip(),
+                )
         except Exception as e:
             logger.error("Error executing hardware detection: %s", e)
 

@@ -1,3 +1,4 @@
+import json
 import subprocess
 import threading
 import urllib.request
@@ -11,8 +12,13 @@ from app.core.paths import get_runtime_dir
 
 logger = get_logger(__name__)
 
-PYTHON_URL = "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip"
-GET_PIP_URL = "https://bootstrap.pypa.io/get-pip.py"
+# Embedded Python version used for the portable runtime.
+# If you change the URL, update _PYTHON_PTH_FILENAME to match the new version.
+_PYTHON_VERSION = "3.11.9"
+_PYTHON_URL = f"https://www.python.org/ftp/python/{_PYTHON_VERSION}/python-{_PYTHON_VERSION}-embed-amd64.zip"
+_PYTHON_PTH_FILENAME = "python311._pth"
+
+_GET_PIP_URL = "https://bootstrap.pypa.io/get-pip.py"
 
 
 @final
@@ -59,7 +65,7 @@ class EnvironmentBootstrap:
                 # 1. Download Python
                 self._report_progress(10, "Downloading portable Python...")
                 zip_path = self.runtime_dir / "python-embed.zip"
-                _ = urllib.request.urlretrieve(PYTHON_URL, zip_path)
+                _ = urllib.request.urlretrieve(_PYTHON_URL, zip_path)
 
                 # 2. Extract Python
                 self._report_progress(20, "Extracting Python...")
@@ -67,9 +73,9 @@ class EnvironmentBootstrap:
                     zip_ref.extractall(self.runtime_dir)
                 zip_path.unlink()
 
-                # 3. Enable site-packages
+                # 3. Enable site-packages by uncommenting "import site" in the .pth file
                 self._report_progress(30, "Configuring Python...")
-                pth_file = self.runtime_dir / "python311._pth"
+                pth_file = self.runtime_dir / _PYTHON_PTH_FILENAME
                 if pth_file.exists():
                     content = pth_file.read_text(encoding="utf-8")
                     content = content.replace("#import site", "import site")
@@ -80,7 +86,7 @@ class EnvironmentBootstrap:
             if not pip_path.exists():
                 self._report_progress(40, "Downloading pip...")
                 get_pip_path = self.runtime_dir / "get-pip.py"
-                _ = urllib.request.urlretrieve(GET_PIP_URL, get_pip_path)
+                _ = urllib.request.urlretrieve(_GET_PIP_URL, get_pip_path)
 
                 self._report_progress(50, "Installing pip...")
                 _ = subprocess.run(
@@ -115,15 +121,19 @@ class EnvironmentBootstrap:
                 creationflags=subprocess.CREATE_NO_WINDOW,
             )
 
-            # 7. Install ffmpeg
+            # 7. Install ffmpeg via imageio-ffmpeg and copy the binary next to python.exe
+            #    so that worker_process.py can find it via PATH.
+            # TODO: use static-ffmpeg instead
             self._report_progress(95, "Installing ffmpeg...")
             _ = subprocess.run(
                 [str(self.python_exe), "-m", "pip", "install", "imageio-ffmpeg"],
                 check=True,
                 creationflags=subprocess.CREATE_NO_WINDOW,
             )
-            ffmpeg_dest = str(self.runtime_dir / "ffmpeg.exe")
-            copy_script = f"import imageio_ffmpeg, shutil; shutil.copy(imageio_ffmpeg.get_ffmpeg_exe(), r'{ffmpeg_dest}')"
+            ffmpeg_dest = json.dumps(str(self.runtime_dir / "ffmpeg.exe"))
+            copy_script = (
+                f"import imageio_ffmpeg, shutil; shutil.copy(imageio_ffmpeg.get_ffmpeg_exe(), {ffmpeg_dest})"
+            )
             _ = subprocess.run(
                 [str(self.python_exe), "-c", copy_script],
                 check=True,

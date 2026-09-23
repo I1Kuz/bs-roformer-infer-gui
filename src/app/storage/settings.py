@@ -1,5 +1,5 @@
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import cast, final
 
@@ -37,11 +37,19 @@ class SettingsManager:
             try:
                 with open(self.settings_file, encoding="utf-8") as f:
                     raw_data: object = json.load(f)
+
                 if isinstance(raw_data, dict):
                     raw_dict = cast(dict[str, object], raw_data)
-                    for key, value in raw_dict.items():
-                        if hasattr(self.settings, key):
-                            setattr(self.settings, key, value)
+                    defaults = AppSettings()
+                    for field in fields(AppSettings):
+                        if field.name not in raw_dict:
+                            continue
+                        val = raw_dict[field.name]
+                        # Strict type check (not isinstance) to avoid the
+                        # bool-is-subclass-of-int trap.
+                        if type(val) is type(getattr(defaults, field.name)):
+                            object.__setattr__(self.settings, field.name, val)
+
                 logger.info("Settings loaded successfully")
             except Exception as e:
                 logger.error("Failed to load settings: %s", e)

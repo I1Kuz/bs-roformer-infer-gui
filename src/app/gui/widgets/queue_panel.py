@@ -1,5 +1,5 @@
-import os
 import subprocess
+import sys
 import tkinter as tk
 from pathlib import Path
 from tkinter import ttk
@@ -77,8 +77,9 @@ class QueuePanel(ttk.LabelFrame):
         if not selection:
             return
         job = self.jobs.get(selection[0])
-        if job and hasattr(os, "startfile"):
-            _ = os.startfile(job.output_dir)
+        if job and sys.platform == "win32":
+            import os
+            _ = os.startfile(job.output_dir)  # type: ignore[attr-defined]
 
     def _on_remove(self) -> None:
         selection = self.tree.selection()
@@ -104,8 +105,9 @@ class QueuePanel(ttk.LabelFrame):
         if not selection:
             return
         job = self.jobs.get(selection[0])
-        if job and hasattr(os, "startfile"):
-            _ = os.startfile(job.input_file)
+        if job and sys.platform == "win32":
+            import os
+            _ = os.startfile(job.input_file)  # type: ignore[attr-defined]
 
     def _on_reveal(self) -> None:
         selection = self.tree.selection()

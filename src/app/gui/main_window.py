@@ -1,8 +1,5 @@
-import os
-import sys
 import threading
 import tkinter as tk
-from collections.abc import Callable
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import final
@@ -15,6 +12,7 @@ from app.core.paths import get_resources_dir
 from app.gui.dialogs.help_dialog import HelpDialog
 from app.gui.dialogs.model_selector import ModelSelectorDialog
 from app.gui.styles import apply_theme
+from app.gui.utils import apply_dark_titlebar
 from app.gui.widgets.queue_panel import QueuePanel
 from app.inference.job import Job
 from app.inference.queue_manager import QueueManager
@@ -35,23 +33,9 @@ class MainWindow(tk.Tk):
         # Set application icon
         icon_path = get_resources_dir() / "icons" / "app.ico"
         if icon_path.exists():
-            set_icon: Callable[..., object] = getattr(self, "iconbitmap")
-            _ = set_icon(default=str(icon_path))
+            self.iconbitmap(default=str(icon_path))  # type: ignore[attr-defined]
 
-        try:
-            import pywinstyles  # type: ignore[import-untyped]
-
-            version = sys.getwindowsversion()
-            if version.major == 10 and version.build >= 22000:
-                _ = pywinstyles.change_header_color(self, "#1c1c1c")
-            elif version.major == 10:
-                _ = pywinstyles.apply_style(self, "dark")
-                set_attr: Callable[..., object] = getattr(self, "wm_attributes")
-                _ = set_attr("-alpha", 0.99)
-                _ = set_attr("-alpha", 1.0)
-        except Exception as e:
-            logger.warning("Failed to apply titlebar theme: %s", e)
-
+        apply_dark_titlebar(self)
         apply_theme()
         _ = self.configure(bg="#1c1c1c")
 
@@ -60,7 +44,7 @@ class MainWindow(tk.Tk):
 
         self.model_manager = ModelManager()
         self.hardware = HardwareDetector()
-        self.queue_manager = QueueManager(self._on_job_updated)
+        self.queue_manager = QueueManager(self.settings, self._on_job_updated)
 
         # Loading screen
         self.loading_frame = ttk.Frame(self)
@@ -82,15 +66,28 @@ class MainWindow(tk.Tk):
         )
         self.loading_lbl.pack()
 
+        # Optional widgets created during first-time install flow
         self.setup_frame: ttk.Frame | None = None
         self.install_progress_frame: ttk.Frame | None = None
+        self.setup_pb_var: tk.DoubleVar | None = None
+        self.setup_pb: ttk.Progressbar | None = None
+        self.setup_status_var: tk.StringVar | None = None
+        self.install_title_lbl: ttk.Label | None = None
         self.bootstrap: EnvironmentBootstrap | None = None
 
         _ = self.after(100, self._startup_check)
 
+    # ------------------------------------------------------------------
+    # Queue polling
+    # ------------------------------------------------------------------
+
     def _poll_queue(self) -> None:
         self.queue_manager.process_ui_events()
         _ = self.after(100, self._poll_queue)
+
+    # ------------------------------------------------------------------
+    # Startup sequence
+    # ------------------------------------------------------------------
 
     def _startup_check(self) -> None:
         def check_env_bg() -> None:
@@ -110,39 +107,35 @@ class MainWindow(tk.Tk):
             self.setup_frame = ttk.Frame(self.center_frame)
             self.setup_frame.pack(fill="both", expand=True)
 
-            title_lbl = ttk.Label(
+            ttk.Label(
                 self.setup_frame,
                 text="First-Time Environment Setup",
                 font=("TkDefaultFont", 13, "bold"),
                 justify="center",
-            )
-            title_lbl.pack(pady=(0, 8))
+            ).pack(pady=(0, 8))
 
-            desc_lbl = ttk.Label(
+            ttk.Label(
                 self.setup_frame,
                 text="BS-RoFormer requires PyTorch runtime and inference dependencies to be installed.",
                 justify="center",
                 wraplength=420,
-            )
-            desc_lbl.pack(pady=(0, 16))
+            ).pack(pady=(0, 16))
 
-            self.btn_install = ttk.Button(
+            ttk.Button(
                 self.setup_frame,
                 text="Install",
                 style="Accent.TButton",
                 command=self._start_first_time_install,
                 width=16,
-            )
-            self.btn_install.pack(pady=(0, 8))
+            ).pack(pady=(0, 8))
 
-            self.lbl_note = ttk.Label(
+            ttk.Label(
                 self.setup_frame,
                 text="Installation will take approximately 5 GB of disk space.",
                 font=("TkDefaultFont", 9),
                 foreground="gray",
                 justify="center",
-            )
-            self.lbl_note.pack(pady=(0, 5))
+            ).pack(pady=(0, 5))
         else:
             self._start_background_init()
 
@@ -171,14 +164,13 @@ class MainWindow(tk.Tk):
         self.setup_pb.pack(fill="x", pady=(0, 10))
 
         self.setup_status_var = tk.StringVar(value="Starting installation...")
-        self.setup_status_lbl = ttk.Label(
+        ttk.Label(
             self.install_progress_frame,
             textvariable=self.setup_status_var,
             font=("TkDefaultFont", 9),
             foreground="gray",
             justify="center",
-        )
-        self.setup_status_lbl.pack(pady=5)
+        ).pack(pady=5)
 
         self.bootstrap = EnvironmentBootstrap(self._on_setup_progress, self._on_setup_done)
         self.bootstrap.start_setup()
@@ -187,9 +179,9 @@ class MainWindow(tk.Tk):
         _ = self.after(0, self._update_setup_progress, percent, status)
 
     def _update_setup_progress(self, percent: int, status: str) -> None:
-        if hasattr(self, "setup_pb_var"):
+        if self.setup_pb_var is not None:
             self.setup_pb_var.set(percent)
-        if hasattr(self, "setup_status_var"):
+        if self.setup_status_var is not None:
             self.setup_status_var.set(status)
 
     def _on_setup_done(self, success: bool, message: str) -> None:
@@ -204,19 +196,18 @@ class MainWindow(tk.Tk):
             self.loading_lbl.pack()
             self._start_background_init()
         else:
-            if hasattr(self, "install_title_lbl"):
+            if self.install_title_lbl is not None:
                 _ = self.install_title_lbl.config(text="Installation Failed")
-            if hasattr(self, "setup_status_var"):
+            if self.setup_status_var is not None:
                 self.setup_status_var.set(f"Error: {message}")
             if self.install_progress_frame:
-                btn_retry = ttk.Button(
+                ttk.Button(
                     self.install_progress_frame,
                     text="Retry",
                     style="Accent.TButton",
                     command=self._start_first_time_install,
                     width=12,
-                )
-                btn_retry.pack(pady=10)
+                ).pack(pady=10)
 
     def _start_background_init(self) -> None:
         def background_init() -> None:
@@ -248,28 +239,9 @@ class MainWindow(tk.Tk):
         self.status_var.set("Ready")
         _ = self.after(100, self._poll_queue)
 
-    def _update_chunk_size_options(self) -> None:
-        vram = self.hardware.vram_gb
-        limit = getattr(self.settings, "vram_limit", 0)
-        if 0 < limit < vram:
-            vram = float(limit)
-
-        options = ["Auto"]
-        if vram > 0:
-            options.append("Small (~3GB VRAM)")
-            if vram >= 4.0:
-                options.append("Medium (~4GB VRAM)")
-            if vram >= 5.5:
-                options.append("Big (~6GB VRAM)")
-            if vram >= 7.5:
-                options.append("Huge (~8+ GB VRAM)")
-        else:
-            options.extend(["Small (~3GB VRAM)", "Medium (~4GB VRAM)", "Big (~6GB VRAM)", "Huge (~8+ GB VRAM)"])
-
-        self.chunk_combo["values"] = options
-        if self.settings.chunk_size_preset not in options:
-            self.settings.chunk_size_preset = "Auto"
-            self.chunk_var.set("Auto")
+    # ------------------------------------------------------------------
+    # UI construction
+    # ------------------------------------------------------------------
 
     def _build_ui(self) -> None:
         main_frame = ttk.Frame(self, padding=20)
@@ -334,13 +306,13 @@ class MainWindow(tk.Tk):
         _ = vram_entry.bind("<FocusOut>", lambda e: self._save_settings())
 
         ttk.Label(adv_frame, text="Chunk Size:").grid(row=1, column=0, sticky="w", pady=2, padx=5)
-        self.chunk_var = tk.StringVar(value=getattr(self.settings, "chunk_size_preset", "Auto"))
+        self.chunk_var = tk.StringVar(value=self.settings.chunk_size_preset)
         self.chunk_combo = ttk.Combobox(adv_frame, textvariable=self.chunk_var, state="readonly", width=22)
         self.chunk_combo.grid(row=1, column=1, sticky="w", pady=2, padx=5)
         _ = self.chunk_combo.bind("<<ComboboxSelected>>", lambda e: self._save_settings())
 
         ttk.Label(adv_frame, text="Export Format:").grid(row=1, column=2, sticky="w", pady=2, padx=5)
-        self.format_var = tk.StringVar(value=getattr(self.settings, "export_format", "WAV 32-bit (Float)"))
+        self.format_var = tk.StringVar(value=self.settings.export_format)
         format_combo = ttk.Combobox(
             adv_frame,
             textvariable=self.format_var,
@@ -356,7 +328,7 @@ class MainWindow(tk.Tk):
         overlap_frame.grid(row=2, column=1, columnspan=3, sticky="ew", pady=(10, 2), padx=5)
 
         ttk.Label(overlap_frame, text="Speed", font=("TkDefaultFont", 8)).pack(side="left")
-        self.overlap_var = tk.IntVar(value=getattr(self.settings, "overlap", 4))
+        self.overlap_var = tk.IntVar(value=self.settings.overlap)
         self.overlap_scale = ttk.Scale(
             overlap_frame,
             from_=2,
@@ -399,6 +371,26 @@ class MainWindow(tk.Tk):
         self.progress_bar = ttk.Progressbar(status_frame, mode="indeterminate")
         self.progress_bar.pack(side="right", fill="x", expand=True, padx=(10, 0))
 
+    # ------------------------------------------------------------------
+    # Settings
+    # ------------------------------------------------------------------
+
+    def _update_chunk_size_options(self) -> None:
+        from app.inference.job import CHUNK_PRESETS
+
+        vram = self.hardware.vram_gb
+        limit = self.settings.vram_limit
+        if 0 < limit < vram:
+            vram = float(limit)
+
+        # When vram is 0 (no GPU detected / CPU mode), show all presets
+        options = [p.label for p in CHUNK_PRESETS if vram == 0 or p.min_vram_gb <= vram]
+
+        self.chunk_combo["values"] = options
+        if self.settings.chunk_size_preset not in options:
+            self.settings.chunk_size_preset = "Auto"
+            self.chunk_var.set("Auto")
+
     def _on_overlap_change(self, val: str) -> None:
         v = int(float(val))
         self.overlap_var.set(v)
@@ -435,7 +427,13 @@ class MainWindow(tk.Tk):
             self.settings.vram_limit = 0
             self.vram_var.set("0")
         self.settings_manager.save()
+        # Keep QueueManager in sync with the latest settings
+        self.queue_manager.settings = self.settings
         self.queue_manager.device = self.settings.device
+
+    # ------------------------------------------------------------------
+    # Model
+    # ------------------------------------------------------------------
 
     def _change_model(self) -> None:
         dlg = ModelSelectorDialog(self, self.model_manager, self.settings.selected_model)
@@ -448,10 +446,13 @@ class MainWindow(tk.Tk):
     def _update_model_label(self) -> None:
         model = self.model_manager.get_model(self.settings.selected_model)
         if model:
-            stems_count = len(model.stems) if model.stems else "?"
-            self.model_lbl_var.set(f"{model.name} ({stems_count} stems)")
+            self.model_lbl_var.set(model.name)
         else:
             self.model_lbl_var.set(self.settings.selected_model)
+
+    # ------------------------------------------------------------------
+    # Queue control
+    # ------------------------------------------------------------------
 
     def _show_help(self) -> None:
         dlg = HelpDialog(self)
@@ -461,29 +462,29 @@ class MainWindow(tk.Tk):
         if self.queue_manager.is_running:
             self.queue_manager.cancel_all()
             self._update_start_button()
-        else:
-            if not self.settings.input_folder or not self.settings.output_folder:
-                _ = messagebox.showwarning("Warning", "Please select input and output folders.")
-                return
+            return
 
-            files = scan_audio_files(self.settings.input_folder)
-            if not files:
-                _ = messagebox.showinfo("Info", "No supported audio files found in the input folder.")
-                return
+        if not self.settings.input_folder or not self.settings.output_folder:
+            _ = messagebox.showwarning("Warning", "Please select input and output folders.")
+            return
 
-            self.queue_manager.clear_jobs()
-            self.queue_panel.clear_all()
+        files = scan_audio_files(self.settings.input_folder)
+        if not files:
+            _ = messagebox.showinfo("Info", "No supported audio files found in the input folder.")
+            return
 
-            for f in files:
-                out_d = self.settings.output_folder
-                if self.settings.create_subfolder_per_track:
-                    basename = Path(f).stem
-                    out_d = str(Path(out_d) / basename)
-                    os.makedirs(out_d, exist_ok=True)
+        self.queue_manager.clear_jobs()
+        self.queue_panel.clear_all()
 
-                self.queue_manager.add_job(f, out_d, self.settings.selected_model)
+        for f in files:
+            out_d = self.settings.output_folder
+            if self.settings.create_subfolder_per_track:
+                track_folder = Path(out_d) / Path(f).stem
+                track_folder.mkdir(parents=True, exist_ok=True)
+                out_d = str(track_folder)
+            self.queue_manager.add_job(f, out_d, self.settings.selected_model)
 
-            self._update_start_button()
+        self._update_start_button()
 
     def _update_start_button(self) -> None:
         if self.queue_manager.is_running:

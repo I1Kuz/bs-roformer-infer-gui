@@ -1,17 +1,20 @@
 from pathlib import Path
 
-SUPPORTED_EXTENSIONS = {".wav", ".mp3", ".flac", ".m4a", ".ogg", ".aiff"}
+SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({".wav", ".mp3", ".flac", ".m4a", ".ogg", ".aiff"})
 
 
 def scan_audio_files(directory: str | Path) -> list[str]:
-    """Scans a directory recursively for supported audio files."""
+    """Scans a directory recursively for supported audio files.
+
+    Uses a single rglob("*") pass with suffix filtering instead of one pass
+    per extension — significantly faster on large directory trees.
+    """
     path = Path(directory)
     if not path.is_dir():
         return []
 
-    found_files: set[str] = set()
-    for ext in SUPPORTED_EXTENSIONS:
-        for file_path in path.rglob(f"*{ext}"):
-            found_files.add(str(file_path.resolve()))
-
-    return sorted(found_files)
+    return sorted(
+        str(f.resolve())
+        for f in path.rglob("*")
+        if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS
+    )

@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, is_dataclass
 from pathlib import Path
-from typing import Any, final
+from typing import Any, cast, final
 
 from app.core.logging import get_logger
 from app.core.paths import get_runtime_dir, get_worker_script_path
@@ -31,7 +31,7 @@ class WorkerEvent:
 
 @final
 class WorkerClient:
-    """Client to communicate with the background worker process."""
+    """Client to communicate with the background worker process via JSON-RPC over stdio."""
 
     def __init__(self, on_event: Callable[[WorkerEvent], None]) -> None:
         self.process: subprocess.Popen[str] | None = None
@@ -81,24 +81,31 @@ class WorkerClient:
                 if not line:
                     continue
 
-                data: dict[str, Any] = json.loads(line)
+                raw: object = json.loads(line)
+                if not isinstance(raw, dict):
+                    continue
+                data = cast(dict[str, Any], raw)
                 logger.debug("[worker stdout] %s", data)
 
                 if "event" in data:
-                    self.on_event(WorkerEvent(event=str(data["event"]), payload=data.get("payload", {})))
+                    raw_payload = data.get("payload", {})
+                    payload: dict[str, Any] = cast(dict[str, Any], raw_payload) if isinstance(raw_payload, dict) else {}
+                    self.on_event(WorkerEvent(
+                        event=str(data["event"]),
+                        payload=payload,
+                    ))
                 elif "id" in data:
                     req_id = str(data["id"])
-                    callback = None
+                    callback: Callable[[WorkerResponse], None] | None = None
                     with self.lock:
-                        if req_id in self.pending_requests:
-                            callback = self.pending_requests.pop(req_id)
+                        callback = self.pending_requests.pop(req_id, None)
 
                     if callback:
                         callback(
                             WorkerResponse(
                                 id=req_id,
                                 status=str(data.get("status", "error")),
-                                error=data.get("error"),
+                                error=data.get("error"),  # type: ignore[arg-type]
                                 data=data.get("data"),
                             )
                         )
@@ -116,8 +123,8 @@ class WorkerClient:
                 stripped = line.strip()
                 if stripped:
                     logger.info("[worker stderr] %s", stripped)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Error reading from worker stderr: %s", e)
 
     def send_command(
         self,
@@ -138,6 +145,7 @@ class WorkerClient:
             payload_dict = dict(payload)
         else:
             payload_dict = {}
+
         msg: dict[str, Any] = {"id": req_id, "command": command}
         msg.update(payload_dict)
 

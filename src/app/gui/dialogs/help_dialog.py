@@ -1,12 +1,11 @@
-import os
 import sys
 import tkinter as tk
 import webbrowser
-from collections.abc import Callable
 from tkinter import ttk
 from typing import final
 
 from app.core.paths import get_app_data_dir
+from app.gui.utils import apply_dark_titlebar
 
 
 @final
@@ -25,47 +24,32 @@ class HelpDialog(tk.Toplevel):
         self.transient(parent)
         _ = self.grab_set()
 
-        try:
-            import pywinstyles  # type: ignore[import-untyped]
-
-            version = sys.getwindowsversion()
-            if version.major == 10 and version.build >= 22000:
-                _ = pywinstyles.change_header_color(self, "#1c1c1c")
-            elif version.major == 10:
-                _ = pywinstyles.apply_style(self, "dark")
-                set_attr: Callable[..., object] = getattr(self, "wm_attributes")
-                _ = set_attr("-alpha", 0.99)
-                _ = set_attr("-alpha", 1.0)
-        except Exception:
-            pass
-
+        apply_dark_titlebar(self)
         _ = self.configure(bg="#1c1c1c")
 
         main_frame = ttk.Frame(self, padding=20)
         main_frame.pack(fill="both", expand=True)
 
-        lbl_title = ttk.Label(main_frame, text="(BS-RoFormer-Infer) Studio", font=("-size", 16, "-weight", "bold"))
-        lbl_title.pack(anchor="w", pady=(0, 5))
+        ttk.Label(
+            main_frame, text="(BS-RoFormer-Infer) Studio", font=("-size", 16, "-weight", "bold")
+        ).pack(anchor="w", pady=(0, 5))
 
-        lbl_subtitle = ttk.Label(
+        ttk.Label(
             main_frame,
             text="An intuitive interface for audio separation using BS-RoFormer models.",
             foreground="gray",
-        )
-        lbl_subtitle.pack(anchor="w", pady=(0, 20))
+        ).pack(anchor="w", pady=(0, 20))
 
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(fill="x", pady=(0, 20))
 
-        btn_github = ttk.Button(
+        ttk.Button(
             btn_frame,
             text="View on GitHub",
             command=lambda: webbrowser.open("https://github.com/openmirlab/bs-roformer-infer"),
-        )
-        btn_github.pack(side="left", padx=(0, 10))
+        ).pack(side="left", padx=(0, 10))
 
-        btn_open_prog_folder = ttk.Button(btn_frame, text="Open Program Folder", command=self._open_prog_folder)
-        btn_open_prog_folder.pack(side="left")
+        ttk.Button(btn_frame, text="Open Program Folder", command=self._open_prog_folder).pack(side="left")
 
         text_frame = ttk.Frame(main_frame)
         text_frame.pack(fill="both", expand=True)
@@ -85,30 +69,24 @@ class HelpDialog(tk.Toplevel):
             font=("-size", 10),
         )
         self.text_widget.pack(fill="both", expand=True)
-
-        def _on_scroll(*args: str) -> None:
-            yview_fn: Callable[..., None] = getattr(self.text_widget, "yview")
-            yview_fn(*args)
-
-        _ = scroll.config(command=_on_scroll)
+        _ = scroll.config(command=self.text_widget.yview)  # type: ignore[arg-type]
 
         self._insert_help_text()
         _ = self.text_widget.configure(state="disabled")
 
-        close_btn = ttk.Button(main_frame, text="Close", command=self.destroy)
-        close_btn.pack(pady=(15, 0), anchor="e")
+        ttk.Button(main_frame, text="Close", command=self.destroy).pack(pady=(15, 0), anchor="e")
 
         self.deiconify()
 
     def _open_prog_folder(self) -> None:
         folder = get_app_data_dir()
-        if not folder.exists():
-            folder.mkdir(parents=True, exist_ok=True)
-        if hasattr(os, "startfile"):
+        folder.mkdir(parents=True, exist_ok=True)
+        if sys.platform == "win32":
+            import os
             _ = os.startfile(folder)
 
     def _insert_help_text(self) -> None:
-        help_content = """# How it Works
+        help_content = """\
 This program separates audio files (like extracting vocals and instruments) using state-of-the-art BS-RoFormer models.
 All downloaded models and runtime files are stored in your local application data directory.
 

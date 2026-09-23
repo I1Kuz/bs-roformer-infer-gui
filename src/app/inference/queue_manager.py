@@ -2,17 +2,12 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from queue import Empty, Queue
+from typing import final
 
 from app.core.logging import get_logger
-from app.inference.engine import (
-    InferCommand,
-    LoadModelCommand,
-    WorkerClient,
-    WorkerEvent,
-    WorkerResponse,
-)
-from app.inference.job import Job, JobStatus
-from app.storage.settings import SettingsManager
+from app.inference.engine import WorkerClient, WorkerEvent, WorkerResponse
+from app.inference.job import InferCommand, Job, JobStatus, LoadModelCommand
+from app.storage.settings import AppSettings
 
 logger = get_logger(__name__)
 
@@ -23,8 +18,10 @@ class UIEvent:
     job: Job
 
 
+@final
 class QueueManager:
-    def __init__(self, on_job_updated: Callable[[Job], None]) -> None:
+    def __init__(self, settings: AppSettings, on_job_updated: Callable[[Job], None]) -> None:
+        self.settings: AppSettings = settings
         self.jobs: list[Job] = []
         self.client: WorkerClient = WorkerClient(self._on_worker_event)
         self.on_job_updated: Callable[[Job], None] = on_job_updated
@@ -106,13 +103,11 @@ class QueueManager:
 
         if self.loaded_model_id != self.current_job.model_id:
             logger.info("Loading model %s for job %s", self.current_job.model_id, self.current_job.id)
-            settings = SettingsManager().settings
-
             cmd = LoadModelCommand(
                 model_id=self.current_job.model_id,
                 device=self.device,
                 backend=self.backend,
-                vram_limit=float(settings.vram_limit),
+                vram_limit=float(self.settings.vram_limit),
             )
             self.client.send_command("load", cmd, self._on_model_load_response)
         else:
@@ -136,14 +131,12 @@ class QueueManager:
             return
 
         logger.info("Starting inference for job %s", self.current_job.id)
-        settings = SettingsManager().settings
-
         cmd = InferCommand(
             input_file=self.current_job.input_file,
             store_dir=self.current_job.output_dir,
-            chunk_size_preset=settings.chunk_size_preset,
-            overlap=settings.overlap,
-            export_format=settings.export_format,
+            chunk_size_preset=self.settings.chunk_size_preset,
+            overlap=self.settings.overlap,
+            export_format=self.settings.export_format,
         )
         self.client.send_command("infer", cmd, self._on_infer_response)
 
@@ -171,7 +164,6 @@ class QueueManager:
     def _on_worker_event(self, event: WorkerEvent) -> None:
         if not self.current_job:
             return
-
         if self.current_job.status == JobStatus.CANCELLED:
             return
 
@@ -189,7 +181,7 @@ class QueueManager:
             self.current_job.status_text = "Processing (Transforming)..."
             self._schedule_ui_update(self.current_job)
         elif event_type == "progress":
-            prog_val = float(payload.get("progress", 0.0))
+            prog_val = float(payload.get("progress", 0.0))  # type: ignore[arg-type]
             text_val = str(payload.get("text", ""))
             prog_type = str(payload.get("type", "unknown"))
 
@@ -217,7 +209,7 @@ class QueueManager:
         self.ui_event_queue.put(UIEvent(event_type="update", job=job))
 
     def process_ui_events(self) -> None:
-        """Called from Tkinter after() poll loop on main thread."""
+        """Called from Tkinter after() poll loop on the main thread."""
         while True:
             try:
                 event = self.ui_event_queue.get_nowait()
