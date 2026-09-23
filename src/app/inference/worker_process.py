@@ -16,6 +16,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, final
 
+from app.inference.protocol import (
+    AudioExportFormat,
+    ProgressType,
+    RpcStatus,
+    WorkerCommand,
+    WorkerEvent,
+)
+
 # Ensure ffmpeg.exe (which sits next to python.exe) is in PATH
 os.environ["PATH"] += os.pathsep + os.path.dirname(sys.executable)
 
@@ -144,14 +152,20 @@ class ProgressStream:
         m = re.search(r"(\d+(?:\.\d+)?)\s*%", line)
         if m:
             val = float(m.group(1)) / 100.0
-            self._send("progress", {"progress": val, "text": f"{int(val * 100)}%", "type": "download"})
+            self._send(
+                WorkerEvent.PROGRESS.value,
+                {"progress": val, "text": f"{int(val * 100)}%", "type": ProgressType.DOWNLOAD.value},
+            )
             return
 
         if "Estimated total processing time" in line:
             m_time = re.search(r"([\d\.]+)\s*seconds", line)
             if m_time:
                 self.total_time = float(m_time.group(1))
-                self._send("progress", {"progress": 0.0, "text": "Starting...", "type": "transform"})
+                self._send(
+                    WorkerEvent.PROGRESS.value,
+                    {"progress": 0.0, "text": "Starting...", "type": ProgressType.TRANSFORM.value},
+                )
             return
 
         if "Estimated time remaining" in line:
@@ -163,11 +177,14 @@ class ProgressStream:
                     time_str = f"{int(rem // 60)}m {int(rem % 60)}s left"
                 else:
                     time_str = f"{rem:.1f}s left"
-                self._send("progress", {"progress": val, "text": time_str, "type": "transform"})
+                self._send(
+                    WorkerEvent.PROGRESS.value,
+                    {"progress": val, "text": time_str, "type": ProgressType.TRANSFORM.value},
+                )
             return
 
         if "Estimated" in line or "processing" in line:
-            self._send("progress_text", {"text": line})
+            self._send(WorkerEvent.PROGRESS_TEXT.value, {"text": line})
 
     def flush(self) -> None:
         _ = self.original_stream.flush()
@@ -261,7 +278,7 @@ def _handle_load(req: dict[str, Any], real_stdout: Any, session: SessionState) -
                     import logging
                     logging.getLogger("worker").error("Failed to set VRAM limit: %s", e)
 
-        _send(real_stdout, "model_loading", {"model_id": model_id})
+        _send(real_stdout, WorkerEvent.MODEL_LOADING.value, {"model_id": model_id})
 
         ckpt_path, config_path = ensure_model_assets(model_id)
 
@@ -297,15 +314,15 @@ def _handle_load(req: dict[str, Any], real_stdout: Any, session: SessionState) -
         session.device = torch_device
         session.vram_limit = vram_limit
 
-        _send(real_stdout, "model_loaded", {"model_id": model_id, "status": "success"})
-        _reply(real_stdout, req_id, "success")
+        _send(real_stdout, WorkerEvent.MODEL_LOADED.value, {"model_id": model_id, "status": RpcStatus.SUCCESS.value})
+        _reply(real_stdout, req_id, RpcStatus.SUCCESS.value)
 
     except Exception as e:
         err_msg = str(e)
         import logging
         logging.getLogger("worker").error("%s", traceback.format_exc())
-        _send(real_stdout, "model_loaded", {"model_id": model_id, "status": "error", "error": err_msg})
-        _reply(real_stdout, req_id, "error", error=err_msg)
+        _send(real_stdout, WorkerEvent.MODEL_LOADED.value, {"model_id": model_id, "status": RpcStatus.ERROR.value, "error": err_msg})
+        _reply(real_stdout, req_id, RpcStatus.ERROR.value, error=err_msg)
 
 
 def _handle_infer(req: dict[str, Any], real_stdout: Any, session: SessionState) -> None:
@@ -319,14 +336,14 @@ def _handle_infer(req: dict[str, Any], real_stdout: Any, session: SessionState) 
     req_id = req.get("id")
 
     if not session.is_loaded:
-        _reply(real_stdout, req_id, "error", error="No model loaded")
+        _reply(real_stdout, req_id, RpcStatus.ERROR.value, error="No model loaded")
         return
 
     input_file = Path(str(req.get("input_file", "")))
     store_dir = Path(str(req.get("store_dir", "")))
     chunk_preset: str = str(req.get("chunk_size_preset", "Auto"))
     overlap: int = int(req.get("overlap", 4))
-    export_format: str = str(req.get("export_format", "WAV 32-bit (Float)"))
+    export_format: str = str(req.get("export_format", AudioExportFormat.WAV_32_FLOAT.value))
 
     try:
         # Apply config overrides based on chunk preset and available VRAM
@@ -346,8 +363,8 @@ def _handle_infer(req: dict[str, Any], real_stdout: Any, session: SessionState) 
             if hasattr(session.config.audio, "num_overlap"):
                 session.config.audio.num_overlap = overlap
 
-        _send(real_stdout, "infer_start", {"input_file": str(input_file)})
-        _send(real_stdout, "progress_text", {"text": f"Loading audio {input_file.name} into memory..."})
+        _send(real_stdout, WorkerEvent.INFER_START.value, {"input_file": str(input_file)})
+        _send(real_stdout, WorkerEvent.PROGRESS_TEXT.value, {"text": f"Loading audio {input_file.name} into memory..."})
 
         store_dir.mkdir(parents=True, exist_ok=True)
 
@@ -368,7 +385,7 @@ def _handle_infer(req: dict[str, Any], real_stdout: Any, session: SessionState) 
         def save_track(data: Any, name_suffix: str) -> None:
             fmt = export_format.upper()
             base = f"{input_file.stem}_{name_suffix}"
-            if "MP3" in fmt:
+            if export_format == AudioExportFormat.MP3_320 or "MP3" in fmt:
                 temp_wav = store_dir / f"{base}.temp.wav"
                 final_mp3 = store_dir / f"{base}.mp3"
                 sf.write(temp_wav, data, sr, subtype="FLOAT")
@@ -379,11 +396,11 @@ def _handle_infer(req: dict[str, Any], real_stdout: Any, session: SessionState) 
                     stderr=sp.DEVNULL,
                 )
                 temp_wav.unlink(missing_ok=True)
-            elif "FLAC" in fmt:
+            elif export_format == AudioExportFormat.FLAC or "FLAC" in fmt:
                 sf.write(store_dir / f"{base}.flac", data, sr, format="FLAC")
-            elif "16-BIT" in fmt:
+            elif export_format == AudioExportFormat.WAV_16 or "16-BIT" in fmt:
                 sf.write(store_dir / f"{base}.wav", data, sr, subtype="PCM_16")
-            elif "24-BIT" in fmt:
+            elif export_format == AudioExportFormat.WAV_24 or "24-BIT" in fmt:
                 sf.write(store_dir / f"{base}.wav", data, sr, subtype="PCM_24")
             else:
                 sf.write(store_dir / f"{base}.wav", data, sr, subtype="FLOAT")
@@ -402,15 +419,15 @@ def _handle_infer(req: dict[str, Any], real_stdout: Any, session: SessionState) 
             instrumental = mix - primary_output
             save_track(instrumental, "instrumental")
 
-        _send(real_stdout, "infer_done", {"input_file": str(input_file), "status": "success"})
-        _reply(real_stdout, req_id, "success")
+        _send(real_stdout, WorkerEvent.INFER_DONE.value, {"input_file": str(input_file), "status": RpcStatus.SUCCESS.value})
+        _reply(real_stdout, req_id, RpcStatus.SUCCESS.value)
 
     except Exception as e:
         err_msg = str(e)
         import logging
         logging.getLogger("worker").error("%s", traceback.format_exc())
-        _send(real_stdout, "infer_done", {"input_file": str(input_file), "status": "error", "error": err_msg})
-        _reply(real_stdout, req_id, "error", error=err_msg)
+        _send(real_stdout, WorkerEvent.INFER_DONE.value, {"input_file": str(input_file), "status": RpcStatus.ERROR.value, "error": err_msg})
+        _reply(real_stdout, req_id, RpcStatus.ERROR.value, error=err_msg)
 
 
 def _handle_release(req: dict[str, Any], real_stdout: Any, session: SessionState) -> None:
@@ -426,7 +443,7 @@ def _handle_release(req: dict[str, Any], real_stdout: Any, session: SessionState
             torch.cuda.empty_cache()
     except Exception:
         pass
-    _reply(real_stdout, req_id, "success")
+    _reply(real_stdout, req_id, RpcStatus.SUCCESS.value)
 
 
 # ---------------------------------------------------------------------------
@@ -487,14 +504,14 @@ def handle_serve() -> None:
 
         cmd = req.get("command")
 
-        if cmd == "load":
+        if cmd == WorkerCommand.LOAD:
             _handle_load(req, real_stdout, session)
-        elif cmd == "infer":
+        elif cmd == WorkerCommand.INFER:
             logger.debug("Received infer command: %s", req)
             _handle_infer(req, real_stdout, session)
-        elif cmd == "release":
+        elif cmd == WorkerCommand.RELEASE:
             _handle_release(req, real_stdout, session)
-        elif cmd == "exit":
+        elif cmd == WorkerCommand.EXIT:
             sys.exit(0)
 
 

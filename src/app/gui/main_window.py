@@ -7,6 +7,12 @@ from typing import final
 from app.audio.scanner import scan_audio_files
 from app.core.bootstrap import EnvironmentBootstrap
 from app.core.hardware import HardwareDetector
+from app.core.i18n import (
+    LANGUAGE_DISPLAY_NAMES,
+    AppLanguage,
+    get_translations,
+    set_current_language,
+)
 from app.core.logging import get_logger
 from app.core.paths import get_resources_dir
 from app.gui.dialogs.help_dialog import HelpDialog
@@ -14,7 +20,8 @@ from app.gui.dialogs.model_selector import ModelSelectorDialog
 from app.gui.styles import apply_theme
 from app.gui.utils import apply_dark_titlebar
 from app.gui.widgets.queue_panel import QueuePanel
-from app.inference.job import Job
+from app.inference.job import CHUNK_PRESETS, Job
+from app.inference.protocol import AudioExportFormat, InferenceDevice
 from app.inference.queue_manager import QueueManager
 from app.models.manager import ModelManager
 from app.storage.settings import SettingsManager
@@ -25,8 +32,13 @@ logger = get_logger(__name__)
 @final
 class MainWindow(tk.Tk):
     def __init__(self) -> None:
+        self.settings_manager = SettingsManager()
+        self.settings = self.settings_manager.settings
+        set_current_language(self.settings.language)
+        t = get_translations()
+
         super().__init__()
-        self.title("(BS-RoFormer-Infer) Studio")
+        self.title(t.app_title)
         self.geometry("900x800")
         self.minsize(950, 850)
 
@@ -38,9 +50,6 @@ class MainWindow(tk.Tk):
         apply_dark_titlebar(self)
         apply_theme()
         _ = self.configure(bg="#1c1c1c")
-
-        self.settings_manager = SettingsManager()
-        self.settings = self.settings_manager.settings
 
         self.model_manager = ModelManager()
         self.hardware = HardwareDetector()
@@ -57,7 +66,7 @@ class MainWindow(tk.Tk):
         self.loading_pb.pack(fill="x", pady=(0, 5))
         self.loading_pb.start(10)
 
-        self.loading_lbl_var = tk.StringVar(value="Initializing...")
+        self.loading_lbl_var = tk.StringVar(value=t.loading.initializing)
         self.loading_lbl = ttk.Label(
             self.center_frame,
             textvariable=self.loading_lbl_var,
@@ -91,7 +100,8 @@ class MainWindow(tk.Tk):
 
     def _startup_check(self) -> None:
         def check_env_bg() -> None:
-            _ = self.after(0, lambda: self.loading_lbl_var.set("Checking environment and dependencies..."))
+            t = get_translations()
+            _ = self.after(0, lambda: self.loading_lbl_var.set(t.loading.checking_env))
             bs = EnvironmentBootstrap(lambda p, s: None, lambda s, m: None)
             exists = bs.check_environment_exists()
             _ = self.after(0, lambda: self._on_env_checked(exists))
@@ -196,14 +206,15 @@ class MainWindow(tk.Tk):
             self.loading_lbl.pack()
             self._start_background_init()
         else:
+            t = get_translations()
             if self.install_title_lbl is not None:
-                _ = self.install_title_lbl.config(text="Installation Failed")
+                _ = self.install_title_lbl.config(text=t.setup.install_failed)
             if self.setup_status_var is not None:
-                self.setup_status_var.set(f"Error: {message}")
+                self.setup_status_var.set(f"{t.setup.error_prefix}{message}")
             if self.install_progress_frame:
                 ttk.Button(
                     self.install_progress_frame,
-                    text="Retry",
+                    text=t.setup.retry,
                     style="Accent.TButton",
                     command=self._start_first_time_install,
                     width=12,
@@ -211,20 +222,22 @@ class MainWindow(tk.Tk):
 
     def _start_background_init(self) -> None:
         def background_init() -> None:
-            _ = self.after(0, lambda: self.loading_lbl_var.set("Starting inference worker process..."))
+            t = get_translations()
+            _ = self.after(0, lambda: self.loading_lbl_var.set(t.loading.starting_worker))
             success = self.queue_manager.start()
             if success:
-                _ = self.after(0, lambda: self.loading_lbl_var.set("Detecting hardware capabilities..."))
+                _ = self.after(0, lambda: self.loading_lbl_var.set(t.loading.detecting_hw))
                 _ = self.hardware.detect()
-                _ = self.after(0, lambda: self.loading_lbl_var.set("Fetching model registry..."))
+                _ = self.after(0, lambda: self.loading_lbl_var.set(t.loading.fetching_registry))
                 _ = self.model_manager.fetch_registry()
             _ = self.after(0, lambda: self._on_startup_complete(success))
 
         threading.Thread(target=background_init, daemon=True).start()
 
     def _on_startup_complete(self, success: bool) -> None:
+        t = get_translations()
         if not success:
-            _ = messagebox.showerror("Error", "Failed to start background worker process.")
+            _ = messagebox.showerror(t.setup.install_failed, t.loading.worker_start_failed)
             self.destroy()
             return
 
@@ -236,7 +249,7 @@ class MainWindow(tk.Tk):
         self._update_chunk_size_options()
         self._update_model_label()
 
-        self.status_var.set("Ready")
+        self.status_var.set(t.queue.ready)
         _ = self.after(100, self._poll_queue)
 
     # ------------------------------------------------------------------
@@ -244,90 +257,122 @@ class MainWindow(tk.Tk):
     # ------------------------------------------------------------------
 
     def _build_ui(self) -> None:
+        t = get_translations()
         main_frame = ttk.Frame(self, padding=20)
         main_frame.pack(fill="both", expand=True)
 
         # Folders section
-        io_frame = ttk.LabelFrame(main_frame, text="Folders", padding=10)
-        io_frame.pack(fill="x", pady=(0, 15))
+        self.io_frame = ttk.LabelFrame(main_frame, text=t.folders.frame_title, padding=10)
+        self.io_frame.pack(fill="x", pady=(0, 15))
 
-        ttk.Label(io_frame, text="Input Folder:").grid(row=0, column=0, sticky="w", pady=5)
+        self.lbl_in_folder = ttk.Label(self.io_frame, text=t.folders.input_folder)
+        self.lbl_in_folder.grid(row=0, column=0, sticky="w", pady=5)
         self.in_var = tk.StringVar(value=self.settings.input_folder)
-        ttk.Entry(io_frame, textvariable=self.in_var, state="readonly").grid(
+        ttk.Entry(self.io_frame, textvariable=self.in_var, state="readonly").grid(
             row=0, column=1, sticky="ew", padx=5, pady=5
         )
-        ttk.Button(io_frame, text="Browse...", width=15, command=self._browse_in).grid(row=0, column=2, pady=5)
+        self.btn_browse_in = ttk.Button(self.io_frame, text=t.folders.browse, width=15, command=self._browse_in)
+        self.btn_browse_in.grid(row=0, column=2, pady=5)
 
-        ttk.Label(io_frame, text="Output Folder:").grid(row=1, column=0, sticky="w", pady=5)
+        self.lbl_out_folder = ttk.Label(self.io_frame, text=t.folders.output_folder)
+        self.lbl_out_folder.grid(row=1, column=0, sticky="w", pady=5)
         self.out_var = tk.StringVar(value=self.settings.output_folder)
-        ttk.Entry(io_frame, textvariable=self.out_var).grid(row=1, column=1, sticky="ew", padx=5, pady=5)
-        ttk.Button(io_frame, text="Browse...", width=15, command=self._browse_out).grid(row=1, column=2, pady=5)
+        ttk.Entry(self.io_frame, textvariable=self.out_var).grid(row=1, column=1, sticky="ew", padx=5, pady=5)
+        self.btn_browse_out = ttk.Button(self.io_frame, text=t.folders.browse, width=15, command=self._browse_out)
+        self.btn_browse_out.grid(row=1, column=2, pady=5)
 
-        _ = io_frame.columnconfigure(1, weight=1)
+        _ = self.io_frame.columnconfigure(1, weight=1)
 
         self.subfolder_var = tk.BooleanVar(value=self.settings.create_subfolder_per_track)
-        ttk.Checkbutton(
-            io_frame,
-            text="Create a subfolder per track",
+        self.chk_subfolder = ttk.Checkbutton(
+            self.io_frame,
+            text=t.folders.subfolder_per_track,
             variable=self.subfolder_var,
             command=self._save_settings,
-        ).grid(row=2, column=1, sticky="w", pady=5)
+        )
+        self.chk_subfolder.grid(row=2, column=1, sticky="w", pady=5)
 
         # Model section
-        model_frame = ttk.LabelFrame(main_frame, text="Model", padding=10)
-        model_frame.pack(fill="x", pady=(0, 15))
+        self.model_frame = ttk.LabelFrame(main_frame, text=t.model.frame_title, padding=10)
+        self.model_frame.pack(fill="x", pady=(0, 15))
 
         self.model_lbl_var = tk.StringVar(value="")
-        ttk.Label(model_frame, textvariable=self.model_lbl_var, font=("TkDefaultFont", 10, "bold")).pack(
+        ttk.Label(self.model_frame, textvariable=self.model_lbl_var, font=("TkDefaultFont", 10, "bold")).pack(
             side="left", padx=(0, 10)
         )
-        ttk.Button(model_frame, text="Change Model...", width=15, command=self._change_model).pack(side="right")
+        self.btn_change_model = ttk.Button(
+            self.model_frame, text=t.model.change_model, width=18, command=self._change_model
+        )
+        self.btn_change_model.pack(side="right")
 
         # Advanced settings section
-        adv_frame = ttk.LabelFrame(main_frame, text="Advanced Settings", padding=10)
-        adv_frame.pack(fill="x", pady=(0, 15))
+        self.adv_frame = ttk.LabelFrame(main_frame, text=t.settings.frame_title, padding=10)
+        self.adv_frame.pack(fill="x", pady=(0, 15))
 
-        ttk.Label(adv_frame, text="Device:").grid(row=0, column=0, sticky="w", pady=2, padx=5)
+        self.lbl_device = ttk.Label(self.adv_frame, text=t.settings.device)
+        self.lbl_device.grid(row=0, column=0, sticky="w", pady=2, padx=5)
         self.device_var = tk.StringVar(value=self.settings.device)
         device_combo = ttk.Combobox(
-            adv_frame,
+            self.adv_frame,
             textvariable=self.device_var,
             state="readonly",
-            values=["auto", "cpu", "cuda", "mps"],
+            values=[d.value for d in InferenceDevice],
             width=10,
         )
         device_combo.grid(row=0, column=1, sticky="w", pady=2, padx=5)
         _ = device_combo.bind("<<ComboboxSelected>>", lambda e: self._save_settings())
 
-        ttk.Label(adv_frame, text="VRAM Limit (GB, 0=auto):").grid(row=0, column=2, sticky="w", pady=2, padx=5)
+        self.lbl_vram = ttk.Label(self.adv_frame, text=t.settings.vram_limit)
+        self.lbl_vram.grid(row=0, column=2, sticky="w", pady=2, padx=5)
         self.vram_var = tk.StringVar(value=str(self.settings.vram_limit))
-        vram_entry = ttk.Entry(adv_frame, textvariable=self.vram_var, width=8)
+        vram_entry = ttk.Entry(self.adv_frame, textvariable=self.vram_var, width=8)
         vram_entry.grid(row=0, column=3, sticky="w", pady=2, padx=5)
         _ = vram_entry.bind("<FocusOut>", lambda e: self._save_settings())
 
-        ttk.Label(adv_frame, text="Chunk Size:").grid(row=1, column=0, sticky="w", pady=2, padx=5)
+        self.lbl_lang = ttk.Label(self.adv_frame, text=t.settings.language)
+        self.lbl_lang.grid(row=0, column=4, sticky="w", pady=2, padx=5)
+        current_lang_display = LANGUAGE_DISPLAY_NAMES.get(self.settings.language, "English")
+        self.lang_var = tk.StringVar(value=current_lang_display)
+        self.lang_combo = ttk.Combobox(
+            self.adv_frame,
+            textvariable=self.lang_var,
+            state="readonly",
+            values=list(LANGUAGE_DISPLAY_NAMES.values()),
+            width=14,
+        )
+        self.lang_combo.grid(row=0, column=5, sticky="w", pady=2, padx=5)
+        _ = self.lang_combo.bind("<<ComboboxSelected>>", lambda e: self._on_language_change())
+
+        self.lbl_chunk = ttk.Label(self.adv_frame, text=t.settings.chunk_size)
+        self.lbl_chunk.grid(row=1, column=0, sticky="w", pady=2, padx=5)
         self.chunk_var = tk.StringVar(value=self.settings.chunk_size_preset)
-        self.chunk_combo = ttk.Combobox(adv_frame, textvariable=self.chunk_var, state="readonly", width=22)
+        self.chunk_combo = ttk.Combobox(self.adv_frame, textvariable=self.chunk_var, state="readonly", width=22)
         self.chunk_combo.grid(row=1, column=1, sticky="w", pady=2, padx=5)
         _ = self.chunk_combo.bind("<<ComboboxSelected>>", lambda e: self._save_settings())
 
-        ttk.Label(adv_frame, text="Export Format:").grid(row=1, column=2, sticky="w", pady=2, padx=5)
+        self.lbl_format = ttk.Label(self.adv_frame, text=t.settings.export_format)
+        self.lbl_format.grid(row=1, column=2, sticky="w", pady=2, padx=5)
         self.format_var = tk.StringVar(value=self.settings.export_format)
         format_combo = ttk.Combobox(
-            adv_frame,
+            self.adv_frame,
             textvariable=self.format_var,
             state="readonly",
-            values=["MP3 320kbps", "WAV 16-bit", "WAV 24-bit", "WAV 32-bit (Float)", "FLAC"],
+            values=[f.value for f in AudioExportFormat],
             width=18,
         )
         format_combo.grid(row=1, column=3, sticky="w", pady=2, padx=5)
         _ = format_combo.bind("<<ComboboxSelected>>", lambda e: self._save_settings())
 
-        ttk.Label(adv_frame, text="Overlap:").grid(row=2, column=0, sticky="w", pady=(10, 2), padx=5)
-        overlap_frame = ttk.Frame(adv_frame)
+        self.btn_help = ttk.Button(self.adv_frame, text=t.settings.help, width=15, command=self._show_help)
+        self.btn_help.grid(row=1, column=5, sticky="e", padx=(5, 0))
+
+        self.lbl_overlap = ttk.Label(self.adv_frame, text=t.settings.overlap)
+        self.lbl_overlap.grid(row=2, column=0, sticky="w", pady=(10, 2), padx=5)
+        overlap_frame = ttk.Frame(self.adv_frame)
         overlap_frame.grid(row=2, column=1, columnspan=3, sticky="ew", pady=(10, 2), padx=5)
 
-        ttk.Label(overlap_frame, text="Speed", font=("TkDefaultFont", 8)).pack(side="left")
+        self.lbl_speed = ttk.Label(overlap_frame, text=t.settings.speed, font=("TkDefaultFont", 8))
+        self.lbl_speed.pack(side="left")
         self.overlap_var = tk.IntVar(value=self.settings.overlap)
         self.overlap_scale = ttk.Scale(
             overlap_frame,
@@ -337,15 +382,13 @@ class MainWindow(tk.Tk):
             command=self._on_overlap_change,
         )
         self.overlap_scale.pack(side="left", fill="x", expand=True, padx=10)
-        ttk.Label(overlap_frame, text="Quality", font=("TkDefaultFont", 8)).pack(side="right")
+        self.lbl_quality = ttk.Label(overlap_frame, text=t.settings.quality, font=("TkDefaultFont", 8))
+        self.lbl_quality.pack(side="right")
 
-        self.overlap_val_lbl = ttk.Label(adv_frame, text=f"{self.overlap_var.get()}")
+        self.overlap_val_lbl = ttk.Label(self.adv_frame, text=f"{self.overlap_var.get()}")
         self.overlap_val_lbl.grid(row=2, column=4, sticky="w", pady=(10, 2))
 
-        _ = adv_frame.columnconfigure(4, weight=1)
-        ttk.Button(adv_frame, text="Help", width=15, command=self._show_help).grid(
-            row=0, column=5, rowspan=3, sticky="e", padx=(10, 0)
-        )
+        _ = self.adv_frame.columnconfigure(5, weight=1)
 
         # Queue section
         self.queue_panel = QueuePanel(main_frame)
@@ -354,7 +397,7 @@ class MainWindow(tk.Tk):
 
         self.btn_start = ttk.Button(
             main_frame,
-            text="Start Transform",
+            text=t.queue.start_transform,
             command=self._start_stop_toggle,
             style="Accent.TButton",
         )
@@ -363,21 +406,54 @@ class MainWindow(tk.Tk):
         # Status bar
         status_frame = ttk.Frame(self)
         status_frame.pack(fill="x", side="bottom", padx=5, pady=5)
-        self.status_var = tk.StringVar(value="Ready")
+        self.status_var = tk.StringVar(value=t.queue.ready)
         ttk.Label(status_frame, textvariable=self.status_var).pack(side="left")
-        self.hw_label = ttk.Label(status_frame, text="GPU: Detecting...")
+        self.hw_label = ttk.Label(status_frame, text=t.queue.gpu_detecting)
         self.hw_label.pack(side="left", padx=10)
 
         self.progress_bar = ttk.Progressbar(status_frame, mode="indeterminate")
         self.progress_bar.pack(side="right", fill="x", expand=True, padx=(10, 0))
 
     # ------------------------------------------------------------------
-    # Settings
+    # Settings & Localization
     # ------------------------------------------------------------------
 
-    def _update_chunk_size_options(self) -> None:
-        from app.inference.job import CHUNK_PRESETS
+    def _on_language_change(self) -> None:
+        display_name = self.lang_var.get()
+        code = next((k for k, v in LANGUAGE_DISPLAY_NAMES.items() if v == display_name), AppLanguage.EN)
+        self.settings.language = code
+        set_current_language(code)
+        self._save_settings()
+        self._refresh_ui_translations()
 
+    def _refresh_ui_translations(self) -> None:
+        t = get_translations()
+        self.title(t.app_title)
+        _ = self.io_frame.config(text=t.folders.frame_title)
+        _ = self.lbl_in_folder.config(text=t.folders.input_folder)
+        _ = self.btn_browse_in.config(text=t.folders.browse)
+        _ = self.lbl_out_folder.config(text=t.folders.output_folder)
+        _ = self.btn_browse_out.config(text=t.folders.browse)
+        _ = self.chk_subfolder.config(text=t.folders.subfolder_per_track)
+        _ = self.model_frame.config(text=t.model.frame_title)
+        _ = self.btn_change_model.config(text=t.model.change_model)
+        _ = self.adv_frame.config(text=t.settings.frame_title)
+        _ = self.lbl_device.config(text=t.settings.device)
+        _ = self.lbl_vram.config(text=t.settings.vram_limit)
+        _ = self.lbl_chunk.config(text=t.settings.chunk_size)
+        _ = self.lbl_format.config(text=t.settings.export_format)
+        _ = self.lbl_lang.config(text=t.settings.language)
+        _ = self.btn_help.config(text=t.settings.help)
+        _ = self.lbl_overlap.config(text=t.settings.overlap)
+        _ = self.lbl_speed.config(text=t.settings.speed)
+        _ = self.lbl_quality.config(text=t.settings.quality)
+        self.queue_panel.refresh_translations()
+        self._update_start_button()
+        self._update_model_label()
+        if self.status_var.get() in ("Ready", "Готово"):
+            self.status_var.set(t.queue.ready)
+
+    def _update_chunk_size_options(self) -> None:
         vram = self.hardware.vram_gb
         limit = self.settings.vram_limit
         if 0 < limit < vram:
@@ -444,11 +520,14 @@ class MainWindow(tk.Tk):
             self._update_model_label()
 
     def _update_model_label(self) -> None:
+        t = get_translations()
         model = self.model_manager.get_model(self.settings.selected_model)
         if model:
             self.model_lbl_var.set(model.name)
-        else:
+        elif self.settings.selected_model:
             self.model_lbl_var.set(self.settings.selected_model)
+        else:
+            self.model_lbl_var.set(t.model.no_model)
 
     # ------------------------------------------------------------------
     # Queue control
@@ -459,18 +538,19 @@ class MainWindow(tk.Tk):
         self.wait_window(dlg)
 
     def _start_stop_toggle(self) -> None:
+        t = get_translations()
         if self.queue_manager.is_running:
             self.queue_manager.cancel_all()
             self._update_start_button()
             return
 
         if not self.settings.input_folder or not self.settings.output_folder:
-            _ = messagebox.showwarning("Warning", "Please select input and output folders.")
+            _ = messagebox.showwarning(t.folders.frame_title, f"{t.folders.input_folder} / {t.folders.output_folder}")
             return
 
         files = scan_audio_files(self.settings.input_folder)
         if not files:
-            _ = messagebox.showinfo("Info", "No supported audio files found in the input folder.")
+            _ = messagebox.showinfo(t.queue.frame_title, "No audio files found")
             return
 
         self.queue_manager.clear_jobs()
@@ -487,8 +567,9 @@ class MainWindow(tk.Tk):
         self._update_start_button()
 
     def _update_start_button(self) -> None:
+        t = get_translations()
         if self.queue_manager.is_running:
-            _ = self.btn_start.config(text="Cancel Transform")
+            _ = self.btn_start.config(text=t.queue.stop)
             try:
                 style = ttk.Style()
                 if not style.lookup("Red.TButton", "background"):
@@ -497,7 +578,7 @@ class MainWindow(tk.Tk):
             except Exception:
                 pass
         else:
-            _ = self.btn_start.config(text="Start Transform", style="Accent.TButton")
+            _ = self.btn_start.config(text=t.queue.start_transform, style="Accent.TButton")
 
     def _on_job_updated(self, job: Job) -> None:
         self.queue_panel.update_job(job)

@@ -5,6 +5,7 @@ from pathlib import Path
 from tkinter import ttk
 from typing import TYPE_CHECKING, Any, final
 
+from app.core.i18n import get_translations
 from app.inference.job import Job, JobStatus
 
 if TYPE_CHECKING:
@@ -14,18 +15,21 @@ if TYPE_CHECKING:
 @final
 class QueuePanel(ttk.LabelFrame):
     def __init__(self, parent: tk.Widget) -> None:
-        super().__init__(parent, text="Queue", padding=10)
+        t = get_translations()
+        super().__init__(parent, text=t.queue.frame_title, padding=10)
         self.jobs: dict[str, Job] = {}
         self.queue_manager: QueueManager | None = None
 
         self.btn_frame: ttk.Frame = ttk.Frame(self)
         self.btn_frame.pack(side="bottom", fill="x", pady=(10, 0))
 
-        self.tree: ttk.Treeview = ttk.Treeview(self, columns=("File", "Model", "Status", "Progress"), show="headings", height=8)
-        self.tree.heading("File", text="File")
-        self.tree.heading("Model", text="Model")
-        self.tree.heading("Status", text="Status")
-        self.tree.heading("Progress", text="Progress")
+        self.tree: ttk.Treeview = ttk.Treeview(
+            self,
+            columns=("File", "Model", "Status", "Progress"),
+            show="headings",
+            height=8,
+        )
+        self._setup_headings()
 
         _ = self.tree.column("File", width=200)
         _ = self.tree.column("Model", width=150)
@@ -38,29 +42,42 @@ class QueuePanel(ttk.LabelFrame):
         self.context_menu: tk.Menu = tk.Menu(self, tearoff=0)
         _ = self.tree.bind("<Button-3>", self._show_context_menu)
 
+    def _setup_headings(self) -> None:
+        t = get_translations()
+        self.tree.heading("File", text=t.queue.col_file)
+        self.tree.heading("Model", text=t.queue.col_model)
+        self.tree.heading("Status", text=t.queue.col_status)
+        self.tree.heading("Progress", text=t.queue.col_progress)
+
+    def refresh_translations(self) -> None:
+        t = get_translations()
+        _ = self.config(text=t.queue.frame_title)
+        self._setup_headings()
+
     def _show_context_menu(self, event: tk.Event[Any]) -> None:
         iid = self.tree.identify_row(event.y)
         if iid:
             _ = self.tree.selection_set(iid)
             job = self.jobs.get(iid)
             if job:
+                t = get_translations()
                 self.context_menu.delete(0, "end")
 
                 if job.status == JobStatus.PENDING:
-                    self.context_menu.add_command(label="Remove", command=self._on_remove)
-                    self.context_menu.add_command(label="Process Next", command=self._on_process_next)
+                    self.context_menu.add_command(label=t.queue.action_remove, command=self._on_remove)
+                    self.context_menu.add_command(label=t.queue.action_prioritize, command=self._on_process_next)
 
                 if job.status == JobStatus.PROCESSING:
-                    self.context_menu.add_command(label="Cancel Transform", command=self._on_cancel_transform)
+                    self.context_menu.add_command(label=t.queue.stop, command=self._on_cancel_transform)
 
                 if self.context_menu.index("end") is not None:
                     self.context_menu.add_separator()
 
-                self.context_menu.add_command(label="Open File", command=self._on_open_file)
-                self.context_menu.add_command(label="Reveal Input", command=self._on_reveal)
+                self.context_menu.add_command(label=t.queue.action_open_file, command=self._on_open_file)
+                self.context_menu.add_command(label=t.queue.action_open_folder, command=self._on_reveal)
 
                 if job.status == JobStatus.FINISHED:
-                    self.context_menu.add_command(label="Reveal Output", command=self._on_reveal_output)
+                    self.context_menu.add_command(label=t.queue.action_open_folder, command=self._on_reveal_output)
 
                 self.context_menu.post(event.x_root, event.y_root)
 

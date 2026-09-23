@@ -1,8 +1,10 @@
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
+
+from app.inference.protocol import AudioExportFormat, InferenceDevice
 
 
-class JobStatus(Enum):
+class JobStatus(StrEnum):
     PENDING = "Pending"
     PROCESSING = "Processing"
     FINISHED = "Finished"
@@ -26,7 +28,7 @@ class Job:
 @dataclass(slots=True)
 class LoadModelCommand:
     model_id: str
-    device: str = "auto"
+    device: str = InferenceDevice.AUTO.value
     backend: str = "torch"
     vram_limit: float = 0.0
 
@@ -37,7 +39,7 @@ class InferCommand:
     store_dir: str
     chunk_size_preset: str = "Auto"
     overlap: int = 4
-    export_format: str = "WAV 32-bit (Float)"
+    export_format: str = AudioExportFormat.WAV_32_FLOAT.value
 
 
 @dataclass(frozen=True, slots=True)

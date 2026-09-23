@@ -4,9 +4,11 @@ from dataclasses import dataclass
 from queue import Empty, Queue
 from typing import final
 
+from app.core.i18n import get_translations
 from app.core.logging import get_logger
 from app.inference.engine import WorkerClient, WorkerEvent, WorkerResponse
 from app.inference.job import InferCommand, Job, JobStatus, LoadModelCommand
+from app.inference.protocol import ProgressType, RpcStatus, WorkerCommand, WorkerEvent as ProtocolEvent
 from app.storage.settings import AppSettings
 
 logger = get_logger(__name__)
@@ -68,7 +70,7 @@ class QueueManager:
     def cancel_current(self) -> None:
         if self.is_running and self.current_job:
             self.current_job.status = JobStatus.CANCELLED
-            self.current_job.status_text = "Cancelled"
+            self.current_job.status_text = get_translations().status.cancelled
             self.current_job.progress_str = ""
             self._schedule_ui_update(self.current_job)
             self.loaded_model_id = None
@@ -80,7 +82,7 @@ class QueueManager:
         for job in self.jobs:
             if job.status == JobStatus.PENDING:
                 job.status = JobStatus.CANCELLED
-                job.status_text = "Cancelled"
+                job.status_text = get_translations().status.cancelled
                 job.progress_str = ""
                 self._schedule_ui_update(job)
         self.cancel_current()
@@ -109,7 +111,7 @@ class QueueManager:
                 backend=self.backend,
                 vram_limit=float(self.settings.vram_limit),
             )
-            self.client.send_command("load", cmd, self._on_model_load_response)
+            self.client.send_command(WorkerCommand.LOAD, cmd, self._on_model_load_response)
         else:
             self._start_inference()
 
@@ -117,7 +119,7 @@ class QueueManager:
         if not self.current_job:
             return
 
-        if response.status == "success":
+        if response.status == RpcStatus.SUCCESS:
             self.loaded_model_id = self.current_job.model_id
             self._start_inference()
         else:
@@ -138,15 +140,15 @@ class QueueManager:
             overlap=self.settings.overlap,
             export_format=self.settings.export_format,
         )
-        self.client.send_command("infer", cmd, self._on_infer_response)
+        self.client.send_command(WorkerCommand.INFER, cmd, self._on_infer_response)
 
     def _on_infer_response(self, response: WorkerResponse) -> None:
         if not self.current_job:
             return
 
-        if response.status == "success":
+        if response.status == RpcStatus.SUCCESS:
             self.current_job.status = JobStatus.FINISHED
-            self.current_job.status_text = "Finished"
+            self.current_job.status_text = get_translations().status.finished
             self.current_job.progress_str = ""
             self.current_job.progress = 1.0
         else:
@@ -169,40 +171,41 @@ class QueueManager:
 
         event_type = event.event
         payload = event.payload
+        t = get_translations()
 
-        if event_type == "model_loading":
-            self.current_job.status_text = "Downloading / Loading Model..."
+        if event_type == ProtocolEvent.MODEL_LOADING:
+            self.current_job.status_text = t.status.downloading_model
             self._schedule_ui_update(self.current_job)
-        elif event_type == "model_loaded":
+        elif event_type == ProtocolEvent.MODEL_LOADED:
             self.current_job.status_text = None
             self.current_job.status = JobStatus.PROCESSING
             self._schedule_ui_update(self.current_job)
-        elif event_type == "infer_start":
-            self.current_job.status_text = "Processing (Transforming)..."
+        elif event_type == ProtocolEvent.INFER_START:
+            self.current_job.status_text = t.status.transforming
             self._schedule_ui_update(self.current_job)
-        elif event_type == "progress":
+        elif event_type == ProtocolEvent.PROGRESS:
             prog_val = float(payload.get("progress", 0.0))  # type: ignore[arg-type]
             text_val = str(payload.get("text", ""))
-            prog_type = str(payload.get("type", "unknown"))
+            prog_type = str(payload.get("type", ProgressType.UNKNOWN.value))
 
             self.current_job.progress = prog_val
-            if prog_type == "download":
-                self.current_job.status_text = "Downloading"
+            if prog_type == ProgressType.DOWNLOAD:
+                self.current_job.status_text = t.status.downloading
                 self.current_job.progress_str = text_val
-            elif prog_type == "transform":
-                self.current_job.status_text = "Transforming"
+            elif prog_type == ProgressType.TRANSFORM:
+                self.current_job.status_text = t.status.transforming
                 self.current_job.progress_str = text_val
             else:
                 self.current_job.status_text = text_val
                 self.current_job.progress_str = f"{int(prog_val * 100)}%"
 
             self._schedule_ui_update(self.current_job)
-        elif event_type == "progress_text":
+        elif event_type == ProtocolEvent.PROGRESS_TEXT:
             text = str(payload.get("text", ""))
             self.current_job.status_text = text
             logger.info("Job status update: %s", text)
             self._schedule_ui_update(self.current_job)
-        elif event_type == "infer_done":
+        elif event_type == ProtocolEvent.INFER_DONE:
             pass
 
     def _schedule_ui_update(self, job: Job) -> None:

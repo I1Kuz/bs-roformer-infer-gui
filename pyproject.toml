@@ -29,6 +29,9 @@ ignore = [
     "E501",   # Line too long (handled by formatter / readability)
     "SIM108", # Use ternary operator instead of if-else (clarity preference)
     "B009",   # Constant getattr for tkinter overload resolution
+    "RUF001", # Ambiguous characters (Cyrillic in i18n translations)
+    "RUF002", # Ambiguous characters in docstrings
+    "RUF003", # Ambiguous characters in comments
 ]
 
 [tool.ruff.lint.per-file-ignores]

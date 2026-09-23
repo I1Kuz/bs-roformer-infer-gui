@@ -11,6 +11,7 @@ from typing import Any, cast, final
 from app.core.logging import get_logger
 from app.core.paths import get_runtime_dir, get_worker_script_path
 from app.inference.job import InferCommand, LoadModelCommand
+from app.inference.protocol import RpcStatus, WorkerCommand
 
 logger = get_logger(__name__)
 
@@ -128,14 +129,14 @@ class WorkerClient:
 
     def send_command(
         self,
-        command: str,
+        command: WorkerCommand | str,
         payload: dict[str, Any] | LoadModelCommand | InferCommand,
         callback: Callable[[WorkerResponse], None] | None = None,
     ) -> None:
         if not self.process or self.process.poll() is not None or not self.process.stdin:
             logger.error("Worker process is not running.")
             if callback:
-                callback(WorkerResponse(id="", status="error", error="Worker not running"))
+                callback(WorkerResponse(id="", status=RpcStatus.ERROR.value, error="Worker not running"))
             return
 
         req_id = str(uuid.uuid4())
@@ -146,7 +147,8 @@ class WorkerClient:
         else:
             payload_dict = {}
 
-        msg: dict[str, Any] = {"id": req_id, "command": command}
+        cmd_str = command.value if isinstance(command, WorkerCommand) else str(command)
+        msg: dict[str, Any] = {"id": req_id, "command": cmd_str}
         msg.update(payload_dict)
 
         if callback:
@@ -161,13 +163,13 @@ class WorkerClient:
             if callback:
                 with self.lock:
                     _ = self.pending_requests.pop(req_id, None)
-                callback(WorkerResponse(id=req_id, status="error", error=str(e)))
+                callback(WorkerResponse(id=req_id, status=RpcStatus.ERROR.value, error=str(e)))
 
     def stop(self) -> None:
         self.running = False
         if self.process:
             try:
-                self.send_command("exit", {})
+                self.send_command(WorkerCommand.EXIT, {})
                 _ = self.process.wait(timeout=2)
             except Exception:
                 self.process.kill()

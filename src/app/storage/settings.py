@@ -5,6 +5,7 @@ from typing import cast, final
 
 from app.core.logging import get_logger
 from app.core.paths import get_settings_dir
+from app.inference.protocol import AudioExportFormat, InferenceDevice
 
 logger = get_logger(__name__)
 
@@ -14,15 +15,16 @@ class AppSettings:
     input_folder: str = ""
     output_folder: str = ""
     create_subfolder_per_track: bool = False
-    device: str = "auto"
+    device: str = InferenceDevice.AUTO.value
     vram_limit: int = 0
     selected_model: str = ""
     chunk_size_preset: str = "Auto"
     overlap: int = 4
-    export_format: str = "WAV 32-bit (Float)"
+    export_format: str = AudioExportFormat.WAV_32_FLOAT.value
     backend: str = "torch"
     overwrite_existing: bool = False
     theme: str = "dark"
+    language: str = "en"
 
 
 @final
