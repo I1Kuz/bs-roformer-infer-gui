@@ -1,6 +1,7 @@
 import subprocess
 import sys
 import tkinter as tk
+from collections.abc import Callable
 from pathlib import Path
 from tkinter import ttk
 from typing import TYPE_CHECKING, Any, final
@@ -20,27 +21,102 @@ class QueuePanel(ttk.LabelFrame):
         self.jobs: dict[str, Job] = {}
         self.queue_manager: QueueManager | None = None
 
-        self.btn_frame: ttk.Frame = ttk.Frame(self)
-        self.btn_frame.pack(side="bottom", fill="x", pady=(10, 0))
+        self.on_add_files: Callable[[], None] | None = None
+
+        # -------------------------------------------------------------
+        # Action Toolbar
+        # -------------------------------------------------------------
+        self.toolbar: ttk.Frame = ttk.Frame(self)
+        self.toolbar.pack(fill="x", pady=(0, 8))
+
+        self.btn_add_files = ttk.Button(
+            self.toolbar,
+            text=f"+ {t.queue.btn_add_files}",
+            command=self._trigger_add_files,
+        )
+        self.btn_add_files.pack(side="left", padx=(0, 6))
+
+        self.btn_clear_all = ttk.Button(
+            self.toolbar,
+            text=t.queue.btn_clear_all,
+            command=self.clear_all,
+        )
+        self.btn_clear_all.pack(side="right", padx=(6, 0))
+
+        self.btn_clear_finished = ttk.Button(
+            self.toolbar,
+            text=t.queue.btn_clear_finished,
+            command=self.clear_completed,
+        )
+        self.btn_clear_finished.pack(side="right")
+
+        # -------------------------------------------------------------
+        # Treeview Area
+        # -------------------------------------------------------------
+        self.tree_container: ttk.Frame = ttk.Frame(self)
+        self.tree_container.pack(fill="both", expand=True)
 
         self.tree: ttk.Treeview = ttk.Treeview(
-            self,
+            self.tree_container,
             columns=("File", "Model", "Status", "Progress"),
             show="headings",
-            height=8,
+            height=9,
         )
         self._setup_headings()
 
-        _ = self.tree.column("File", width=200)
-        _ = self.tree.column("Model", width=150)
-        _ = self.tree.column("Status", width=150)
-        _ = self.tree.column("Progress", width=80)
+        _ = self.tree.column("File", width=260, minwidth=150)
+        _ = self.tree.column("Model", width=180, minwidth=120)
+        _ = self.tree.column("Status", width=150, minwidth=100)
+        _ = self.tree.column("Progress", width=90, minwidth=70, anchor="center")
 
-        self.tree.pack(fill="both", expand=True)
+        scroll_y = ttk.Scrollbar(self.tree_container, orient="vertical", command=self._on_scroll)
+        _ = self.tree.configure(yscrollcommand=scroll_y.set)  # type: ignore[arg-type]
 
-        # Context Menu
+        self.tree.pack(side="left", fill="both", expand=True)
+        scroll_y.pack(side="right", fill="y")
+
+        # Empty state overlay
+        self.empty_frame: ttk.Frame = ttk.Frame(self.tree_container)
+        self.empty_title_lbl = ttk.Label(
+            self.empty_frame,
+            text=t.queue.empty_title,
+            font=("TkDefaultFont", 11, "bold"),
+            justify="center",
+        )
+        self.empty_title_lbl.pack()
+        self.empty_hint_lbl = ttk.Label(
+            self.empty_frame,
+            text=t.queue.empty_hint,
+            font=("TkDefaultFont", 9),
+            foreground="gray",
+            justify="center",
+        )
+        self.empty_hint_lbl.pack(pady=(2, 0))
+
+        # -------------------------------------------------------------
+        # Summary footer
+        # -------------------------------------------------------------
+        self.footer_frame: ttk.Frame = ttk.Frame(self)
+        self.footer_frame.pack(fill="x", pady=(8, 0))
+
+        self.summary_var: tk.StringVar = tk.StringVar(value="")
+        self.summary_lbl: ttk.Label = ttk.Label(
+            self.footer_frame,
+            textvariable=self.summary_var,
+            font=("TkDefaultFont", 9),
+            foreground="gray",
+        )
+        self.summary_lbl.pack(side="left")
+
+        # Context Menu & shortcuts
         self.context_menu: tk.Menu = tk.Menu(self, tearoff=0)
         _ = self.tree.bind("<Button-3>", self._show_context_menu)
+        _ = self.tree.bind("<Delete>", lambda _: self._on_remove())
+
+        self._update_empty_state()
+
+    def _on_scroll(self, *args: Any) -> None:
+        _ = getattr(self.tree, "yview")(*args)
 
     def _setup_headings(self) -> None:
         t = get_translations()
@@ -49,10 +125,41 @@ class QueuePanel(ttk.LabelFrame):
         self.tree.heading("Status", text=t.queue.col_status)
         self.tree.heading("Progress", text=t.queue.col_progress)
 
+    def _trigger_add_files(self) -> None:
+        if self.on_add_files:
+            self.on_add_files()
+
+    def _update_empty_state(self) -> None:
+        if len(self.jobs) == 0:
+            self.empty_frame.place(relx=0.5, rely=0.5, anchor="center")
+        else:
+            self.empty_frame.place_forget()
+        self._update_summary()
+
+    def _update_summary(self) -> None:
+        t = get_translations()
+        total = len(self.jobs)
+        done = sum(1 for j in self.jobs.values() if j.status == JobStatus.FINISHED)
+        proc = sum(1 for j in self.jobs.values() if j.status == JobStatus.PROCESSING)
+        pending = sum(1 for j in self.jobs.values() if j.status == JobStatus.PENDING)
+
+        if total == 0:
+            self.summary_var.set("")
+        else:
+            self.summary_var.set(
+                t.queue.summary_fmt.format(total=total, done=done, proc=proc, pending=pending)
+            )
+
     def refresh_translations(self) -> None:
         t = get_translations()
         _ = self.config(text=t.queue.frame_title)
         self._setup_headings()
+        _ = self.btn_add_files.config(text=f"+ {t.queue.btn_add_files}")
+        _ = self.btn_clear_finished.config(text=t.queue.btn_clear_finished)
+        _ = self.btn_clear_all.config(text=t.queue.btn_clear_all)
+        _ = self.empty_title_lbl.config(text=t.queue.empty_title)
+        _ = self.empty_hint_lbl.config(text=t.queue.empty_hint)
+        self._update_summary()
 
     def _show_context_menu(self, event: tk.Event[Any]) -> None:
         iid = self.tree.identify_row(event.y)
@@ -107,6 +214,7 @@ class QueuePanel(ttk.LabelFrame):
             self.queue_manager.remove_job(job_id)
         self.tree.delete(job_id)
         _ = self.jobs.pop(job_id, None)
+        self._update_empty_state()
 
     def _on_process_next(self) -> None:
         selection = self.tree.selection()
@@ -146,6 +254,8 @@ class QueuePanel(ttk.LabelFrame):
 
         if job.status == JobStatus.PROCESSING:
             prog_str = job.progress_str if job.progress_str else f"{int(job.progress * 100)}%"
+        elif job.status == JobStatus.FINISHED:
+            prog_str = "100%"
         else:
             prog_str = ""
 
@@ -159,6 +269,7 @@ class QueuePanel(ttk.LabelFrame):
                     prog_str,
                 ),
             )
+            self.jobs[job.id] = job
         else:
             _ = self.tree.insert(
                 "",
@@ -173,13 +284,21 @@ class QueuePanel(ttk.LabelFrame):
             )
             self.jobs[job.id] = job
 
+        self._update_empty_state()
+
     def clear_completed(self) -> None:
         for job_id, job in list(self.jobs.items()):
-            if job.status == JobStatus.FINISHED:
+            if job.status in (JobStatus.FINISHED, JobStatus.CANCELLED):
                 self.tree.delete(job_id)
                 _ = self.jobs.pop(job_id, None)
+        self._update_empty_state()
 
     def clear_all(self) -> None:
+        if self.queue_manager and self.queue_manager.is_running:
+            self.queue_manager.cancel_all()
         for job_id in list(self.jobs.keys()):
             self.tree.delete(job_id)
             _ = self.jobs.pop(job_id, None)
+        if self.queue_manager:
+            self.queue_manager.clear_jobs()
+        self._update_empty_state()
