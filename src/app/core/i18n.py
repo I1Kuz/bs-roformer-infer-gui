@@ -26,6 +26,7 @@ class FoldersTranslations:
     input_folder: str
     output_folder: str
     browse: str
+    open_folder: str
     subfolder_per_track: str
 
 
@@ -35,6 +36,10 @@ class ModelTranslations:
     frame_title: str
     change_model: str
     no_model: str
+    category_prefix: str
+    stems_prefix: str
+    status_installed: str
+    status_online: str
 
 
 @final
@@ -63,7 +68,9 @@ class QueueTranslations:
     col_actions: str
     btn_add_files: str
     btn_add_folder: str
+    btn_scan_folder: str
     btn_clear_finished: str
+    btn_clear_all: str
     action_open_file: str
     action_open_folder: str
     action_prioritize: str
@@ -74,6 +81,9 @@ class QueueTranslations:
     gpu_detecting: str
     gpu_prefix: str
     no_gpu: str
+    empty_title: str
+    empty_hint: str
+    summary_fmt: str
 
 
 @final
@@ -108,7 +118,12 @@ class ModelDialogTranslations:
 class HelpDialogTranslations:
     title: str
     btn_close: str
-    content: str
+    tab_quickstart: str
+    tab_settings: str
+    tab_models: str
+    quickstart_content: str
+    settings_content: str
+    models_content: str
 
 
 @final
@@ -126,63 +141,62 @@ class AppTranslations:
 
 
 # ---------------------------------------------------------------------------
-# English translations
+# English text & translations
 # ---------------------------------------------------------------------------
 
-_EN_HELP_TEXT = """BS-RoFormer Infer Studio — Guide
+_EN_QUICKSTART = """Welcome to BS-RoFormer Infer Studio!
 
-VRAM & Hardware
-• CUDA (NVIDIA): Recommended for best performance.
-• CPU: Fallback mode if no compatible GPU is available.
-• VRAM Limit: 0 means Auto. Set a value (in GB) to limit memory allocation.
+1. Select or Add Audio Files:
+   • Click "Add Files..." to queue individual audio files (.mp3, .wav, .flac, .ogg, .m4a), OR
+   • Select an Input Folder to automatically queue all audio files inside it.
 
-Chunk Size
-• Auto: Recommended for most systems. Chooses optimal chunk size based on GPU VRAM.
-• Small (~3GB VRAM): Use for GPUs with 4GB VRAM or less to prevent Out-Of-Memory errors.
-• Medium (~4GB VRAM): Balanced quality and memory usage.
-• Big (~6GB VRAM): Native chunk size for models with high quality.
-• Huge (~8+ GB VRAM): Maximum context window for cards with 8GB+ VRAM.
+2. Choose Target Model:
+   • Click "Change Model..." to select from fine-tuned neural models.
+   • Models are available for vocals, instrumental, karaoke, de-reverb, and multi-stem separation.
 
-Overlap
-• Controls overlap between consecutive audio chunks (2 to 8).
-• Lower values (2-3): Faster processing.
-• Higher values (4-8): Eliminates seams and artifacts between chunks, higher quality.
+3. Pick Output Destination:
+   • Set the Output Folder.
+   • Optionally enable "Create a subfolder per track" to keep separated stems tidy.
 
-Export Formats
-• WAV 32-bit (Float): Lossless, highest dynamic range.
-• WAV 24-bit / 16-bit: Standard uncompressed PCM formats.
-• MP3 320kbps: Compact compressed audio.
-• FLAC: Lossless compressed audio.
+4. Start Separation:
+   • Click "Start Transform" to process the queue with GPU acceleration.
+   • Monitor progress bars for each track in real time.
 """
 
-_UK_HELP_TEXT = """BS-RoFormer Infer Studio — Довідка
+_EN_SETTINGS_GUIDE = """VRAM & Hardware:
+• CUDA (NVIDIA): Recommended for best performance. Automatically selected when available.
+• CPU Mode: Fallback if no supported GPU is detected.
+• VRAM Limit: 0 means Auto. Set a custom limit (in GB) if sharing GPU with other apps.
 
-Відеопам'ять (VRAM) та обладнання
-• CUDA (NVIDIA): Рекомендується для максимальної швидкості.
-• CPU: Резервний режим, якщо сумісний GPU відсутній.
-• Ліміт VRAM: 0 означає Авто. Вкажіть число (в ГБ) для обмеження виділення пам'яті.
+Chunk Size Preset:
+• Auto: Recommended. Automatically balances quality and VRAM safety.
+• Small (~3GB VRAM): For GPUs with 4GB VRAM or less to prevent Out-Of-Memory errors.
+• Medium (~4GB VRAM): Balanced speed and memory usage.
+• Big (~6GB VRAM): Standard high-quality model resolution.
+• Huge (~8+ GB VRAM): Maximum receptive field context for GPUs with 8GB+ VRAM.
 
-Розмір чанка (Chunk Size)
-• Auto: Рекомендовано для більшості систем. Обирає розмір на основі пам'яті GPU.
-• Small (~3GB VRAM): Для відеокарт з 4GB VRAM або менше для запобігання помилкам Out-Of-Memory.
-• Medium (~4GB VRAM): Збалансоване співвідношення якості та споживання пам'яті.
-• Big (~6GB VRAM): Стандартний розмір чанка для високої якості.
-• Huge (~8+ GB VRAM): Максимальне контекстне вікно для відеокарт від 8GB VRAM.
+Overlap (Overlap Factor):
+• 2x (Fastest): Quickest processing with standard chunk boundaries.
+• 4x (Balanced): Smooth blend between consecutive chunks; eliminates seams.
+• 6x - 8x (High Quality): Maximum cross-fade fidelity for studio mastering.
+"""
 
-Перекриття (Overlap)
-• Керує ступенем накладання сусідніх чанків аудіо (від 2 до 8).
-• Менші значення (2-3): Швидша обробка.
-• Більші значення (4-8): Усуває артефакти та стики між чанками, найкраща якість.
+_EN_MODELS_GUIDE = """Separation Categories:
+• Vocals & Instrumental: Separates lead/backing vocals from music accompaniment.
+• Karaoke: Specifically isolates lead vocals while retaining background harmonies.
+• De-Reverb: Cleans room acoustics and dry signals from echo-heavy recordings.
+• Multi-Stem: Splitting into 4-6 individual tracks (Vocals, Drums, Bass, Guitar, Piano, Other).
 
-Формати експорту
-• WAV 32-bit (Float): Без втрат, максимальний динамічний діапазон.
-• WAV 24-bit / 16-bit: Стандартні формати PCM без стиснення.
-• MP3 320kbps: Компактне стиснене аудіо з бітрейтом 320 кбіт/с.
-• FLAC: Стиснення без втрат якості.
+Audio Export Formats:
+• WAV 32-bit (Float): Lossless, 32-bit floating point. Highest dynamic range, zero clipping.
+• WAV 24-bit: Professional uncompressed audio standard.
+• WAV 16-bit: CD-quality standard uncompressed PCM.
+• FLAC: Lossless compression, smaller file size with identical sound quality.
+• MP3 320kbps: Compact compressed audio suitable for general listening.
 """
 
 _EN_TRANSLATIONS = AppTranslations(
-    app_title="(BS-RoFormer-Infer) Studio",
+    app_title="BS-RoFormer Infer Studio",
     loading=LoadingTranslations(
         initializing="Initializing...",
         checking_env="Checking environment and dependencies...",
@@ -196,15 +210,20 @@ _EN_TRANSLATIONS = AppTranslations(
         input_folder="Input Folder:",
         output_folder="Output Folder:",
         browse="Browse...",
+        open_folder="Open in Explorer",
         subfolder_per_track="Create a subfolder per track",
     ),
     model=ModelTranslations(
-        frame_title="Model",
+        frame_title="Active Model",
         change_model="Change Model...",
         no_model="No model selected",
+        category_prefix="Category:",
+        stems_prefix="Stems:",
+        status_installed="Installed",
+        status_online="Auto-download",
     ),
     settings=SettingsTranslations(
-        frame_title="Advanced Settings",
+        frame_title="Inference Settings",
         device="Device:",
         vram_limit="VRAM Limit (GB, 0=auto):",
         chunk_size="Chunk Size:",
@@ -216,7 +235,7 @@ _EN_TRANSLATIONS = AppTranslations(
         language="Language:",
     ),
     queue=QueueTranslations(
-        frame_title="Queue",
+        frame_title="Processing Queue",
         col_file="File",
         col_model="Model",
         col_status="Status",
@@ -224,7 +243,9 @@ _EN_TRANSLATIONS = AppTranslations(
         col_actions="Actions",
         btn_add_files="Add Files...",
         btn_add_folder="Add Folder...",
+        btn_scan_folder="Scan Folder",
         btn_clear_finished="Clear Finished",
+        btn_clear_all="Clear All",
         action_open_file="Open File",
         action_open_folder="Open Folder",
         action_prioritize="Move to Top",
@@ -235,6 +256,9 @@ _EN_TRANSLATIONS = AppTranslations(
         gpu_detecting="GPU: Detecting...",
         gpu_prefix="GPU: ",
         no_gpu="No compatible GPU (CPU mode)",
+        empty_title="Queue is empty",
+        empty_hint="Add audio files or scan input folder to start separation",
+        summary_fmt="Total: {total}  |  Completed: {done}  |  Processing: {proc}  |  Pending: {pending}",
     ),
     status=StatusTranslations(
         pending="Pending",
@@ -260,12 +284,73 @@ _EN_TRANSLATIONS = AppTranslations(
     help_dialog=HelpDialogTranslations(
         title="Help & Documentation",
         btn_close="Close",
-        content=_EN_HELP_TEXT,
+        tab_quickstart="Quick Start",
+        tab_settings="Audio & Quality",
+        tab_models="Models & Formats",
+        quickstart_content=_EN_QUICKSTART,
+        settings_content=_EN_SETTINGS_GUIDE,
+        models_content=_EN_MODELS_GUIDE,
     ),
 )
 
+
+# ---------------------------------------------------------------------------
+# Ukrainian text & translations
+# ---------------------------------------------------------------------------
+
+_UK_QUICKSTART = """Ласкаво просимо до BS-RoFormer Infer Studio!
+
+1. Додайте аудіофайли:
+   • Натисніть «Додати файли...» для вибору окремих треків (.mp3, .wav, .flac, .ogg, .m4a), АБО
+   • Оберіть «Вхідну папку», щоб автоматично додати всі знайдені файли до черги.
+
+2. Оберіть нейромережеву модель:
+   • Натисніть «Змінити модель...», щоб обрати підготовлену модель.
+   • Доступні моделі для виділення вокалу, інструменталу, караоке, де-реверберації та мультитреків.
+
+3. Вкажіть папку для збереження:
+   • Оберіть «Папку збереження».
+   • За бажанням увімкніть «Створювати окрему папку для кожного треку».
+
+4. Запустіть обробку:
+   • Натисніть акцентну кнопку «Розпочати обробку».
+   • Прогрес кожного треку відображатиметься в реальному часі.
+"""
+
+_UK_SETTINGS_GUIDE = """Відеопам'ять (VRAM) та обладнання:
+• CUDA (NVIDIA): Рекомендується для максимальної швидкості (обирається автоматично).
+• Режим CPU: Резервний режим, якщо сумісна відеокарта відсутня.
+• Ліміт VRAM: 0 означає Авто. Вкажіть число (в ГБ) для обмеження виділення пам'яті.
+
+Розмір чанка (Chunk Size):
+• Auto: Рекомендовано. Автоматично підбирає розмір під відеопам'ять.
+• Small (~3GB VRAM): Для відеокарт з 4GB VRAM або менше для запобігання помилкам пам'яті.
+• Medium (~4GB VRAM): Збалансована швидкість та споживання пам'яті.
+• Big (~6GB VRAM): Стандартний розмір чанка для високої якості.
+• Huge (~8+ GB VRAM): Максимальне контекстне вікно для відеокарт від 8GB VRAM.
+
+Перекриття (Overlap Factor):
+• 2x (Швидко): Найшвидша обробка зі стандартним склеюванням чанків.
+• 4x (Збалансовано): Плавне накладання сусідніх фрагментів, усуває стики.
+• 6x - 8x (Висока якість): Максимальна точність крос-фейду для студійного зведення.
+"""
+
+_UK_MODELS_GUIDE = """Категорії розділення:
+• Вокал та Інструментал: Відокремлює вокальну партію від інструментального супроводу.
+• Караоке: Вирізає лід-вокал, зберігаючи бек-вокали та інструментал.
+• Де-реверберація: Очищає сигнал від луни кімнати та зайвої реверберації.
+• Мульти-трек: Розподіл на 4-6 окремих доріжок (вокал, бас, ударні, гітара, клавішні тощо).
+
+Формати збереження:
+• WAV 32-bit (Float): Без втрат, 32-бітний формат з плаваючою комою (максимальний динамічний діапазон).
+• WAV 24-bit: Студійний нестиснений стандарт аудіо.
+• WAV 16-bit: Стандартний нестиснений PCM-звук (якість Audio CD).
+• FLAC: Стиснення без втрат якості (менший розмір файлу).
+• MP3 320kbps: Компактне стиснене аудіо з бітрейтом 320 кбіт/с.
+"""
+
 _UK_TRANSLATIONS = AppTranslations(
-    app_title="(BS-RoFormer-Infer) Studio",
+    app_title="BS-RoFormer Infer Studio",
     loading=LoadingTranslations(
         initializing="Ініціалізація...",
         checking_env="Перевірка середовища та залежностей...",
@@ -279,15 +364,20 @@ _UK_TRANSLATIONS = AppTranslations(
         input_folder="Вхідна папка:",
         output_folder="Папка збереження:",
         browse="Огляд...",
+        open_folder="Відкрити в Провіднику",
         subfolder_per_track="Створювати окрему папку для кожного треку",
     ),
     model=ModelTranslations(
-        frame_title="Модель",
+        frame_title="Активна модель",
         change_model="Змінити модель...",
         no_model="Модель не обрано",
+        category_prefix="Категорія:",
+        stems_prefix="Доріжки:",
+        status_installed="Встановлено",
+        status_online="Автозавантаження",
     ),
     settings=SettingsTranslations(
-        frame_title="Розширені налаштування",
+        frame_title="Параметри обробки",
         device="Пристрій:",
         vram_limit="Ліміт VRAM (ГБ, 0=авто):",
         chunk_size="Розмір чанка:",
@@ -299,7 +389,7 @@ _UK_TRANSLATIONS = AppTranslations(
         language="Мова:",
     ),
     queue=QueueTranslations(
-        frame_title="Черга",
+        frame_title="Черга обробки",
         col_file="Файл",
         col_model="Модель",
         col_status="Статус",
@@ -307,7 +397,9 @@ _UK_TRANSLATIONS = AppTranslations(
         col_actions="Дії",
         btn_add_files="Додати файли...",
         btn_add_folder="Додати папку...",
+        btn_scan_folder="Сканувати папку",
         btn_clear_finished="Очистити завершені",
+        btn_clear_all="Очистити все",
         action_open_file="Відкрити файл",
         action_open_folder="Відкрити папку",
         action_prioritize="На початок черги",
@@ -318,6 +410,9 @@ _UK_TRANSLATIONS = AppTranslations(
         gpu_detecting="GPU: Визначення...",
         gpu_prefix="GPU: ",
         no_gpu="Сумісний GPU відсутній (режим CPU)",
+        empty_title="Черга порожня",
+        empty_hint="Додайте аудіофайли або проскануйте вхідну папку для початку",
+        summary_fmt="Усього: {total}  |  Завершено: {done}  |  В обробці: {proc}  |  В черзі: {pending}",
     ),
     status=StatusTranslations(
         pending="В черзі",
@@ -343,7 +438,12 @@ _UK_TRANSLATIONS = AppTranslations(
     help_dialog=HelpDialogTranslations(
         title="Довідка та документація",
         btn_close="Закрити",
-        content=_UK_HELP_TEXT,
+        tab_quickstart="Швидкий старт",
+        tab_settings="Якість та звук",
+        tab_models="Моделі та формати",
+        quickstart_content=_UK_QUICKSTART,
+        settings_content=_UK_SETTINGS_GUIDE,
+        models_content=_UK_MODELS_GUIDE,
     ),
 )
 
