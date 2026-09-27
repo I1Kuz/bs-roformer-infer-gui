@@ -52,6 +52,8 @@ class QueueManager:
         )
         self.jobs.append(job)
         self.on_job_updated(job)
+
+    def start_processing(self) -> None:
         self._process_next_job()
 
     def remove_job(self, job_id: str) -> None:
