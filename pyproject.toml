@@ -4,6 +4,11 @@ version = "0.1.0"
 description = "BS-RoFormer Infer Studio GUI"
 readme = "README.md"
 requires-python = ">=3.12"
+dependencies = [
+    "sv-ttk",
+    "pywinstyles",
+    "bs-roformer-infer>=0.1.5",
+]
 
 [project.scripts]
 bs-roformer-studio = "app.main:main"
@@ -54,7 +59,6 @@ venvPath = "."
 venv = ".venv"
 extraPaths = [
     "src",
-    "bs-roformer-infer/src",
 ]
 include = [
     "src/app",
@@ -63,5 +67,4 @@ exclude = [
     "**/tests/**",
     "**/.venv/**",
     "**/__pycache__/**",
-    "bs-roformer-infer/**",
 ]

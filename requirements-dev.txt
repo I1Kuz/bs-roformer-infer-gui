@@ -1,0 +1,5 @@
+-r requirements.txt
+pyinstaller
+basedpyright
+ruff
+types-PyYAML

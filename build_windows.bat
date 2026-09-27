@@ -13,7 +13,7 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 echo Installing build dependencies...
-.\.venv\Scripts\python.exe -m pip install -r dev-requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m pip install pyinstaller
 
 echo Running PyInstaller...

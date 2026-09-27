@@ -1,4 +1,3 @@
 sv-ttk
 pywinstyles
-pyinstaller
-
+bs-roformer-infer>=0.1.5

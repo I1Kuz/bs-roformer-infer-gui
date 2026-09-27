@@ -2,11 +2,11 @@
 ; Requires Inno Setup 6.0 or newer (uses native DownloadTemporaryFile / DownloadPage)
 
 #define MyAppName "BS-RoFormer Infer Studio"
-#define MyAppVersion "1.0.0"
-#define MyAppPublisher "OpenMIRLab"
+#define MyAppVersion "0.1.0"
+#define MyAppPublisher "I1Kuz"
 #define MyAppURL "https://github.com/I1Kuz/bs-roformer-infer-gui"
 #define MyAppExeName "BS-RoFormer-Infer Studio.exe"
-#define RuntimeZipURL "https://github.com/I1Kuz/bs-roformer-infer-gui/releases/download/v1.0.0/runtime-cu121.zip"
+#define RuntimeZipURL "https://github.com/I1Kuz/bs-roformer-infer-gui/releases/download/v0.1.0/runtime-cu121.zip"
 
 [Setup]
 AppId={{5A0B2C3D-E4F5-4A6B-8C7D-9E0F1A2B3C4D}
