@@ -99,6 +99,13 @@ class ModelManager:
             logger.error("Error fetching registry: %s", e)
             return False
 
+    def refresh_installed_status(self) -> None:
+        """Refreshes installed status of known models by inspecting local cache directory."""
+        cache_dir = Path.home() / ".cache" / "bs-roformer-infer"
+        for meta in self.models.values():
+            if meta.checkpoint:
+                meta.installed = (cache_dir / meta.id / meta.checkpoint).exists()
+
     def get_all_models(self) -> list[ModelMetadata]:
         return list(self.models.values())
 

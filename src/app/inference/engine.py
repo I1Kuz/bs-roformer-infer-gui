@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 import subprocess
@@ -115,6 +116,29 @@ class WorkerClient:
             except Exception as e:
                 logger.error("Error reading from worker stdout: %s", e)
 
+        # Process exited or pipe closed
+        if self.running:
+            self.running = False
+            exit_code = self.process.poll() if self.process else None
+            logger.error("Worker process exited unexpectedly (exit code: %s)", exit_code)
+            with self.lock:
+                pending = list(self.pending_requests.values())
+                self.pending_requests.clear()
+            for cb in pending:
+                try:
+                    cb(WorkerResponse(
+                        id="",
+                        status=RpcStatus.ERROR.value,
+                        error=f"Worker process crashed (exit code: {exit_code})",
+                    ))
+                except Exception as ex:
+                    logger.error("Error invoking pending request callback on crash: %s", ex)
+
+            self.on_event(WorkerEvent(
+                event="worker_crashed",
+                payload={"exit_code": exit_code},
+            ))
+
     def _read_stderr(self) -> None:
         while self.running and self.process and self.process.poll() is None:
             try:
@@ -169,10 +193,19 @@ class WorkerClient:
 
     def stop(self) -> None:
         self.running = False
-        if self.process:
-            try:
-                self.send_command(WorkerCommand.EXIT, {})
-                _ = self.process.wait(timeout=2)
-            except Exception:
-                self.process.kill()
-            self.process = None
+        proc = self.process
+        self.process = None
+        if proc:
+            def _shutdown() -> None:
+                with contextlib.suppress(Exception):
+                    if proc.poll() is None and proc.stdin:
+                        with contextlib.suppress(Exception):
+                            msg = {"id": "exit", "command": WorkerCommand.EXIT.value}
+                            _ = proc.stdin.write(json.dumps(msg) + "\n")
+                            proc.stdin.flush()
+                        _ = proc.wait(timeout=0.3)
+                if proc.poll() is None:
+                    with contextlib.suppress(Exception):
+                        proc.kill()
+
+            threading.Thread(target=_shutdown, daemon=True).start()

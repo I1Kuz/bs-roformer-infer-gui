@@ -93,6 +93,9 @@ class HardwareDetector:
         return self.info
 
     def get_display_string(self) -> str:
+        from app.core.i18n import get_translations
+
+        t = get_translations()
         if self.info.cuda_available:
-            return f"GPU: {self.info.gpu_name} (VRAM: {self.info.vram_gb:.1f} GB)"
-        return "GPU: CPU Only (CUDA not available)"
+            return f"{t.queue.gpu_prefix}{self.info.gpu_name} (VRAM: {self.info.vram_gb:.1f} GB)"
+        return t.queue.no_gpu

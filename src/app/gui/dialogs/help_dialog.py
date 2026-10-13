@@ -47,7 +47,7 @@ class HelpDialog(tk.Toplevel):
 
         ttk.Label(
             title_box,
-            text="Band-Split RoFormer Audio Source Separation Studio",
+            text=t.help_dialog.subtitle,
             font=("TkDefaultFont", 9),
             foreground="gray",
         ).pack(anchor="w")

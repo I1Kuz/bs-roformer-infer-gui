@@ -1,6 +1,16 @@
 from pathlib import Path
 
-SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({".wav", ".mp3", ".flac", ".m4a", ".ogg", ".aiff"})
+SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({
+    ".wav",
+    ".mp3",
+    ".flac",
+    ".ogg",
+    ".m4a",
+    ".aac",
+    ".wma",
+    ".aiff",
+})
+SUPPORTED_AUDIO_PATTERNS: str = "*.wav;*.flac;*.mp3;*.ogg;*.m4a;*.aac;*.wma;*.aiff"
 
 
 def scan_audio_files(directory: str | Path) -> list[str]:

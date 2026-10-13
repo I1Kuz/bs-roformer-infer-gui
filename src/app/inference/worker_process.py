@@ -81,31 +81,34 @@ def _resolve_chunk_size(config: Any, preset: str, vram_limit: float) -> int:
     """Resolves the effective chunk size from a preset string and available VRAM."""
     import torch
 
-    from app.inference.job import CHUNK_PRESETS
-
     hop = _get_hop_length(config)
     native = _get_native_chunk_size(config, hop)
 
-    # Look up the preset by key (startswith match for backwards compat with labels)
-    for p in CHUNK_PRESETS:
-        if p.key != "Auto" and preset.startswith(p.key):
-            samples = p.samples if p.samples > 0 else native
-            return (samples // hop) * hop
+    preset_sizes = {
+        "Small": 352800,
+        "Medium": 470400,
+        "Big": native,
+        "Huge": 705600,
+    }
+
+    for key, samples in preset_sizes.items():
+        if preset.startswith(key):
+            target = samples if samples > 0 else native
+            return (target // hop) * hop
 
     # "Auto" — use native size, downscale if GPU VRAM is too limited
     chunk = native
     if torch.cuda.is_available():
         total_memory = torch.cuda.get_device_properties(0).total_memory
-        gb = total_memory / (1024 ** 3)
+        gb = total_memory / (1024**3)
         if 0 < vram_limit < gb:
             gb = float(vram_limit)
-        # Pick the largest preset that fits the available VRAM
-        for p in reversed(CHUNK_PRESETS):
-            if p.key != "Auto" and p.samples > 0 and p.min_vram_gb > 0 and gb < p.min_vram_gb:
-                continue
-            if p.key != "Auto" and p.samples > 0:
-                chunk = (p.samples // hop) * hop
-                break
+        if gb < 4.0:
+            chunk = (352800 // hop) * hop
+        elif gb < 5.5:
+            chunk = (470400 // hop) * hop
+        else:
+            chunk = native
     return chunk
 
 
@@ -368,12 +371,28 @@ def _handle_infer(req: dict[str, Any], real_stdout: Any, session: SessionState) 
             if hasattr(session.config.audio, "num_overlap"):
                 session.config.audio.num_overlap = overlap
 
+        overwrite: bool = bool(req.get("overwrite_existing", True))
+
         _send(real_stdout, WorkerEvent.INFER_START.value, {"input_file": str(input_file)})
         _send(real_stdout, WorkerEvent.PROGRESS_TEXT.value, {"text": f"Loading audio {input_file.name} into memory..."})
 
         store_dir.mkdir(parents=True, exist_ok=True)
 
-        mix, sr = sf.read(input_file)
+        try:
+            mix, sr = sf.read(input_file)
+        except Exception as read_err:
+            try:
+                res_proc = sp.run(
+                    ["ffmpeg", "-y", "-i", str(input_file), "-f", "wav", "-"],
+                    check=True,
+                    stdout=sp.PIPE,
+                    stderr=sp.DEVNULL,
+                )
+                import io
+                mix, sr = sf.read(io.BytesIO(res_proc.stdout))
+            except Exception:
+                raise read_err from None
+
         original_mono = mix.ndim == 1
         if original_mono:
             mix = np.stack([mix, mix], axis=-1)
@@ -391,24 +410,42 @@ def _handle_infer(req: dict[str, Any], real_stdout: Any, session: SessionState) 
             fmt = export_format.upper()
             base = f"{input_file.stem}_{name_suffix}"
             if export_format == AudioExportFormat.MP3_320 or "MP3" in fmt:
+                target_path = store_dir / f"{base}.mp3"
+                if not overwrite and target_path.exists():
+                    return
                 temp_wav = store_dir / f"{base}.temp.wav"
-                final_mp3 = store_dir / f"{base}.mp3"
                 sf.write(temp_wav, data, sr, subtype="FLOAT")
-                _ = sp.run(
-                    ["ffmpeg", "-y", "-i", str(temp_wav), "-b:a", "320k", str(final_mp3)],
-                    check=True,
-                    stdout=sp.DEVNULL,
-                    stderr=sp.DEVNULL,
-                )
-                temp_wav.unlink(missing_ok=True)
+                try:
+                    _ = sp.run(
+                        ["ffmpeg", "-y", "-i", str(temp_wav), "-b:a", "320k", str(target_path)],
+                        check=True,
+                        stdout=sp.DEVNULL,
+                        stderr=sp.DEVNULL,
+                    )
+                except FileNotFoundError:
+                    raise RuntimeError("FFmpeg is required for MP3 export. Please install FFmpeg or choose WAV/FLAC format.") from None
+                finally:
+                    temp_wav.unlink(missing_ok=True)
             elif export_format == AudioExportFormat.FLAC or "FLAC" in fmt:
-                sf.write(store_dir / f"{base}.flac", data, sr, format="FLAC")
+                target_path = store_dir / f"{base}.flac"
+                if not overwrite and target_path.exists():
+                    return
+                sf.write(target_path, data, sr, format="FLAC")
             elif export_format == AudioExportFormat.WAV_16 or "16-BIT" in fmt:
-                sf.write(store_dir / f"{base}.wav", data, sr, subtype="PCM_16")
+                target_path = store_dir / f"{base}.wav"
+                if not overwrite and target_path.exists():
+                    return
+                sf.write(target_path, data, sr, subtype="PCM_16")
             elif export_format == AudioExportFormat.WAV_24 or "24-BIT" in fmt:
-                sf.write(store_dir / f"{base}.wav", data, sr, subtype="PCM_24")
+                target_path = store_dir / f"{base}.wav"
+                if not overwrite and target_path.exists():
+                    return
+                sf.write(target_path, data, sr, subtype="PCM_24")
             else:
-                sf.write(store_dir / f"{base}.wav", data, sr, subtype="FLOAT")
+                target_path = store_dir / f"{base}.wav"
+                if not overwrite and target_path.exists():
+                    return
+                sf.write(target_path, data, sr, subtype="FLOAT")
 
         for instr in instruments:
             track_output = res[instr].T
@@ -418,10 +455,10 @@ def _handle_infer(req: dict[str, Any], real_stdout: Any, session: SessionState) 
 
         if instruments:
             # Compute instrumental as mixture minus the first (primary) stem
-            primary_output = res[instruments[0]].T
+            # Both mix and res[instruments[0]].T have shape (N, 2)
+            instrumental = mix - res[instruments[0]].T
             if original_mono:
-                primary_output = primary_output[:, 0]
-            instrumental = mix - primary_output
+                instrumental = instrumental[:, 0]
             save_track(instrumental, "instrumental")
 
         _send(real_stdout, WorkerEvent.INFER_DONE.value, {"input_file": str(input_file), "status": RpcStatus.SUCCESS.value})

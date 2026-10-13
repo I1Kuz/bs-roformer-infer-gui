@@ -73,6 +73,8 @@ class QueueTranslations:
     btn_clear_all: str
     action_open_file: str
     action_open_folder: str
+    action_reveal_input: str
+    action_open_output: str
     action_prioritize: str
     action_remove: str
     start_transform: str
@@ -84,6 +86,9 @@ class QueueTranslations:
     empty_title: str
     empty_hint: str
     summary_fmt: str
+    err_no_output_folder: str
+    file_filter_audio: str
+    select_files_title: str
 
 
 @final
@@ -117,6 +122,7 @@ class ModelDialogTranslations:
 @dataclass(frozen=True, slots=True)
 class HelpDialogTranslations:
     title: str
+    subtitle: str
     btn_close: str
     tab_quickstart: str
     tab_settings: str
@@ -248,6 +254,8 @@ _EN_TRANSLATIONS = AppTranslations(
         btn_clear_all="Clear All",
         action_open_file="Open File",
         action_open_folder="Open Folder",
+        action_reveal_input="Show in Folder",
+        action_open_output="Open Output Folder",
         action_prioritize="Move to Top",
         action_remove="Remove",
         start_transform="Start Transform",
@@ -259,6 +267,9 @@ _EN_TRANSLATIONS = AppTranslations(
         empty_title="Queue is empty",
         empty_hint="Add audio files or scan input folder to start separation",
         summary_fmt="Total: {total}  |  Completed: {done}  |  Processing: {proc}  |  Pending: {pending}",
+        err_no_output_folder="Please select an Output Folder before starting separation.",
+        file_filter_audio="Audio Files",
+        select_files_title="Select Audio Files",
     ),
     status=StatusTranslations(
         pending="Pending",
@@ -283,6 +294,7 @@ _EN_TRANSLATIONS = AppTranslations(
     ),
     help_dialog=HelpDialogTranslations(
         title="Help & Documentation",
+        subtitle="Band-Split RoFormer Audio Source Separation Studio",
         btn_close="Close",
         tab_quickstart="Quick Start",
         tab_settings="Audio & Quality",
@@ -402,6 +414,8 @@ _UK_TRANSLATIONS = AppTranslations(
         btn_clear_all="Очистити все",
         action_open_file="Відкрити файл",
         action_open_folder="Відкрити папку",
+        action_reveal_input="Показати у папці",
+        action_open_output="Відкрити папку збереження",
         action_prioritize="На початок черги",
         action_remove="Видалити",
         start_transform="Розпочати обробку",
@@ -411,8 +425,11 @@ _UK_TRANSLATIONS = AppTranslations(
         gpu_prefix="GPU: ",
         no_gpu="Сумісний GPU відсутній (режим CPU)",
         empty_title="Черга порожня",
-        empty_hint="Додайте аудіофайли або проскануйте вхідну папку для початку",
+        empty_hint="Додайте аудіофайли або оберіть вхідну папку для початку",
         summary_fmt="Усього: {total}  |  Завершено: {done}  |  В обробці: {proc}  |  В черзі: {pending}",
+        err_no_output_folder="Будь ласка, оберіть папку збереження перед початком обробки.",
+        file_filter_audio="Аудіофайли",
+        select_files_title="Виберіть аудіофайли",
     ),
     status=StatusTranslations(
         pending="В черзі",
@@ -437,6 +454,7 @@ _UK_TRANSLATIONS = AppTranslations(
     ),
     help_dialog=HelpDialogTranslations(
         title="Довідка та документація",
+        subtitle="Студія розділення аудіодоріжок Band-Split RoFormer",
         btn_close="Закрити",
         tab_quickstart="Швидкий старт",
         tab_settings="Якість та звук",

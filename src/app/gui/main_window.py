@@ -8,7 +8,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import Any, final
 
-from app.audio.scanner import scan_audio_files
+from app.audio.scanner import SUPPORTED_AUDIO_PATTERNS, scan_audio_files
 from app.core.hardware import HardwareDetector
 from app.core.i18n import (
     LANGUAGE_DISPLAY_NAMES,
@@ -121,7 +121,7 @@ class MainWindow(tk.Tk):
             return
 
         # Auto-configure CUDA if available and device wasn't explicitly pinned
-        if self.hardware.cuda_available and self.settings.device in (InferenceDevice.AUTO.value, "cpu", ""):
+        if self.hardware.cuda_available and self.settings.device in (InferenceDevice.AUTO.value, ""):
             self.settings.device = InferenceDevice.CUDA.value
             self._save_settings()
 
@@ -229,9 +229,10 @@ class MainWindow(tk.Tk):
 
         norm_out = os.path.normpath(self.settings.output_folder) if self.settings.output_folder else ""
         self.out_var = tk.StringVar(value=norm_out)
-        ttk.Entry(self.io_frame, textvariable=self.out_var).grid(
-            row=1, column=1, sticky="ew", padx=6, pady=4
-        )
+        self.out_entry = ttk.Entry(self.io_frame, textvariable=self.out_var)
+        self.out_entry.grid(row=1, column=1, sticky="ew", padx=6, pady=4)
+        _ = self.out_entry.bind("<FocusOut>", self._on_out_folder_edited)
+        _ = self.out_entry.bind("<Return>", self._on_out_folder_edited)
 
         out_btns_frame = ttk.Frame(self.io_frame)
         out_btns_frame.grid(row=1, column=2, sticky="e", pady=4)
@@ -252,7 +253,7 @@ class MainWindow(tk.Tk):
             self.io_frame,
             text=t.folders.subfolder_per_track,
             variable=self.subfolder_var,
-            command=self._save_settings,
+            command=self._on_subfolder_toggle,
         )
         self.chk_subfolder.grid(row=2, column=1, sticky="w", pady=(4, 0))
 
@@ -466,7 +467,8 @@ class MainWindow(tk.Tk):
         self.queue_panel.refresh_translations()
         self._update_start_button()
         self._update_model_card()
-        if self.status_var.get() in ("Ready", "Готово"):
+        _ = self.hw_label.config(text=self.hardware.get_display_string())
+        if not self.queue_manager.is_running:
             self.status_var.set(t.queue.ready)
 
     def _update_chunk_size_options(self) -> None:
@@ -502,6 +504,21 @@ class MainWindow(tk.Tk):
             self.out_var.set(norm_d)
             self.settings.output_folder = norm_d
             self._save_settings()
+            self.queue_manager.update_pending_output_dir(norm_d, self.settings.create_subfolder_per_track)
+
+    def _on_out_folder_edited(self, event: Any = None) -> None:
+        val = self.out_var.get().strip()
+        norm_d = os.path.normpath(val) if val else ""
+        if norm_d != self.settings.output_folder:
+            self.settings.output_folder = norm_d
+            self._save_settings()
+            if norm_d:
+                self.queue_manager.update_pending_output_dir(norm_d, self.settings.create_subfolder_per_track)
+
+    def _on_subfolder_toggle(self) -> None:
+        self._save_settings()
+        out_d = self._get_effective_output_dir()
+        self.queue_manager.update_pending_output_dir(out_d, self.settings.create_subfolder_per_track)
 
     def _open_dir_in_explorer(self, folder_str: str) -> None:
         if not folder_str:
@@ -534,12 +551,14 @@ class MainWindow(tk.Tk):
     # ------------------------------------------------------------------
 
     def _change_model(self) -> None:
+        self.model_manager.refresh_installed_status()
         dlg = ModelSelectorDialog(self, self.model_manager, self.settings.selected_model)
         self.wait_window(dlg)
         if dlg.selected_model_id != self.settings.selected_model:
             self.settings.selected_model = dlg.selected_model_id
             self._save_settings()
             self._update_model_card()
+            self.queue_manager.update_pending_model(self.settings.selected_model)
 
     def _update_model_card(self) -> None:
         t = get_translations()
@@ -571,12 +590,13 @@ class MainWindow(tk.Tk):
     # ------------------------------------------------------------------
 
     def _on_add_files_clicked(self) -> None:
+        t = get_translations()
         filetypes = [
-            ("Audio Files", "*.wav;*.flac;*.mp3;*.ogg;*.m4a;*.aac;*.wma"),
+            (t.queue.file_filter_audio, SUPPORTED_AUDIO_PATTERNS),
             ("All Files", "*.*"),
         ]
         files = filedialog.askopenfilenames(
-            title="Select Audio Files",
+            title=t.queue.select_files_title,
             filetypes=filetypes,
             initialdir=self.settings.input_folder or None,
         )
@@ -585,17 +605,15 @@ class MainWindow(tk.Tk):
             for f in files:
                 target_out = out_d
                 if self.settings.create_subfolder_per_track:
-                    track_folder = Path(target_out) / Path(f).stem
-                    track_folder.mkdir(parents=True, exist_ok=True)
-                    target_out = str(track_folder)
+                    target_out = str(Path(target_out) / Path(f).stem)
                 self.queue_manager.add_job(f, target_out, self.settings.selected_model)
 
     def _get_effective_output_dir(self) -> str:
         if self.settings.output_folder and Path(self.settings.output_folder).exists():
             return self.settings.output_folder
         if self.settings.input_folder and Path(self.settings.input_folder).exists():
-            return self.settings.input_folder
-        return str(Path.home())
+            return str(Path(self.settings.input_folder) / "separated")
+        return str(Path.home() / "Music" / "separated")
 
     def _scan_folder_into_queue(self, folder_path: str, clear_existing: bool) -> None:
         files = scan_audio_files(folder_path)
@@ -608,15 +626,22 @@ class MainWindow(tk.Tk):
 
         existing_files = {j.input_file for j in self.queue_manager.jobs}
         out_d = self._get_effective_output_dir()
+        effective_out_path = Path(out_d).resolve()
 
         for f in files:
+            file_path = Path(f).resolve()
+            try:
+                if file_path.is_relative_to(effective_out_path):
+                    continue
+            except (ValueError, AttributeError):
+                pass
+
             if f in existing_files:
                 continue
+
             target_out = out_d
             if self.settings.create_subfolder_per_track:
-                track_folder = Path(target_out) / Path(f).stem
-                track_folder.mkdir(parents=True, exist_ok=True)
-                target_out = str(track_folder)
+                target_out = str(Path(target_out) / Path(f).stem)
             self.queue_manager.add_job(f, target_out, self.settings.selected_model)
 
     def _show_help(self) -> None:
@@ -645,7 +670,7 @@ class MainWindow(tk.Tk):
                 return
 
         if not self.settings.output_folder:
-            _ = messagebox.showwarning(t.folders.frame_title, f"{t.folders.output_folder}")
+            _ = messagebox.showwarning(t.folders.frame_title, t.queue.err_no_output_folder)
             return
 
         self._update_start_button()
@@ -671,6 +696,9 @@ class MainWindow(tk.Tk):
     def _on_job_updated(self, job: Job) -> None:
         self.queue_panel.update_job(job)
         self._update_start_button()
+        if job.status in (JobStatus.FINISHED, JobStatus.PROCESSING):
+            self.model_manager.refresh_installed_status()
+            self._update_model_card()
         if not self.queue_manager.is_running:
             t = get_translations()
             self.status_var.set(t.queue.ready)

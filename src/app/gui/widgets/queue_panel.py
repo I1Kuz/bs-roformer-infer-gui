@@ -181,10 +181,10 @@ class QueuePanel(ttk.LabelFrame):
                     self.context_menu.add_separator()
 
                 self.context_menu.add_command(label=t.queue.action_open_file, command=self._on_open_file)
-                self.context_menu.add_command(label=t.queue.action_open_folder, command=self._on_reveal)
+                self.context_menu.add_command(label=t.queue.action_reveal_input, command=self._on_reveal)
 
                 if job.status == JobStatus.FINISHED:
-                    self.context_menu.add_command(label=t.queue.action_open_folder, command=self._on_reveal_output)
+                    self.context_menu.add_command(label=t.queue.action_open_output, command=self._on_reveal_output)
 
                 self.context_menu.post(event.x_root, event.y_root)
 
@@ -210,9 +210,13 @@ class QueuePanel(ttk.LabelFrame):
         if not selection:
             return
         job_id = selection[0]
+        job = self.jobs.get(job_id)
+        if job and job.status == JobStatus.PROCESSING:
+            return
         if self.queue_manager:
             self.queue_manager.remove_job(job_id)
-        self.tree.delete(job_id)
+        if self.tree.exists(job_id):
+            self.tree.delete(job_id)
         _ = self.jobs.pop(job_id, None)
         self._update_empty_state()
 
@@ -223,7 +227,13 @@ class QueuePanel(ttk.LabelFrame):
         job_id = selection[0]
         if self.queue_manager:
             self.queue_manager.prioritize_job(job_id)
-            self.tree.move(job_id, "", 0)
+            target_idx = 0
+            for child in self.tree.get_children():
+                child_job = self.jobs.get(child)
+                if child_job and child_job.status == JobStatus.PROCESSING:
+                    target_idx = 1
+                    break
+            self.tree.move(job_id, "", target_idx)
 
     def _on_open_file(self) -> None:
         selection = self.tree.selection()
@@ -247,10 +257,29 @@ class QueuePanel(ttk.LabelFrame):
             )
 
     def update_job(self, job: Job) -> None:
+        if self.queue_manager and not any(j.id == job.id for j in self.queue_manager.jobs):
+            if self.tree.exists(job.id):
+                self.tree.delete(job.id)
+            _ = self.jobs.pop(job.id, None)
+            self._update_empty_state()
+            return
+
+        t = get_translations()
         filename = Path(job.input_file).name
-        status_str = job.status_text if job.status_text else job.status.value
-        if job.status == JobStatus.FAILED and job.error:
-            status_str = f"Failed: {job.error}"
+        if job.status_text:
+            status_str = job.status_text
+        elif job.status == JobStatus.PENDING:
+            status_str = t.status.pending
+        elif job.status == JobStatus.PROCESSING:
+            status_str = t.status.processing
+        elif job.status == JobStatus.FINISHED:
+            status_str = t.status.finished
+        elif job.status == JobStatus.CANCELLED:
+            status_str = t.status.cancelled
+        elif job.status == JobStatus.FAILED:
+            status_str = f"{t.status.failed}: {job.error}" if job.error else t.status.failed
+        else:
+            status_str = job.status.value
 
         if job.status == JobStatus.PROCESSING:
             prog_str = job.progress_str if job.progress_str else f"{int(job.progress * 100)}%"
@@ -259,7 +288,7 @@ class QueuePanel(ttk.LabelFrame):
         else:
             prog_str = ""
 
-        if job.id in self.jobs:
+        if self.tree.exists(job.id):
             self.tree.item(
                 job.id,
                 values=(
@@ -288,16 +317,20 @@ class QueuePanel(ttk.LabelFrame):
 
     def clear_completed(self) -> None:
         for job_id, job in list(self.jobs.items()):
-            if job.status in (JobStatus.FINISHED, JobStatus.CANCELLED):
-                self.tree.delete(job_id)
+            if job.status in (JobStatus.FINISHED, JobStatus.CANCELLED, JobStatus.FAILED):
+                if self.tree.exists(job_id):
+                    self.tree.delete(job_id)
                 _ = self.jobs.pop(job_id, None)
+        if self.queue_manager:
+            self.queue_manager.clear_finished_jobs()
         self._update_empty_state()
 
     def clear_all(self) -> None:
         if self.queue_manager and self.queue_manager.is_running:
             self.queue_manager.cancel_all()
         for job_id in list(self.jobs.keys()):
-            self.tree.delete(job_id)
+            if self.tree.exists(job_id):
+                self.tree.delete(job_id)
             _ = self.jobs.pop(job_id, None)
         if self.queue_manager:
             self.queue_manager.clear_jobs()

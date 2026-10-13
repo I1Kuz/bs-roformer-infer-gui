@@ -40,6 +40,7 @@ class InferCommand:
     chunk_size_preset: str = "Auto"
     overlap: int = 4
     export_format: str = AudioExportFormat.WAV_32_FLOAT.value
+    overwrite_existing: bool = True
 
 
 @dataclass(frozen=True, slots=True)
