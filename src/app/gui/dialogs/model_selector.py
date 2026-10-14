@@ -16,12 +16,15 @@ class ModelSelectorDialog(tk.Toplevel):
         t = get_translations()
         self.title(t.model_dialog.title)
 
-        width, height = 800, 450
         parent.update_idletasks()
-        x = parent.winfo_x() + (parent.winfo_width() - width) // 2
-        y = parent.winfo_y() + (parent.winfo_height() - height) // 2
+        pw = max(600, parent.winfo_width())
+        ph = max(450, parent.winfo_height())
+        width = min(820, max(580, int(pw * 0.85)))
+        height = min(520, max(360, int(ph * 0.65)))
+        x = max(0, parent.winfo_x() + (pw - width) // 2)
+        y = max(0, parent.winfo_y() + (ph - height) // 2)
         self.geometry(f"{width}x{height}+{x}+{y}")
-        self.minsize(width, height)
+        self.minsize(min(560, width), min(340, height))
 
         self.transient(parent)
         _ = self.grab_set()
@@ -42,17 +45,27 @@ class ModelSelectorDialog(tk.Toplevel):
         self.tree.heading("Category", text=t.model_dialog.col_category)
         self.tree.heading("Installed", text=t.model_dialog.col_installed)
 
-        _ = self.tree.column("Name", width=300)
-        _ = self.tree.column("Category", width=120)
-        _ = self.tree.column("Installed", width=60)
+        _ = self.tree.column("Name", stretch=True)
+        _ = self.tree.column("Category", stretch=False, width=140)
+        _ = self.tree.column("Installed", stretch=False, width=100)
 
         self.tree.pack(fill="both", expand=True, padx=10, pady=5)
 
         btn_frame = ttk.Frame(self)
         btn_frame.pack(fill="x", padx=10, pady=10)
 
-        ttk.Button(btn_frame, text=t.model_dialog.btn_select, command=self._on_select).pack(side="right", padx=5)
-        ttk.Button(btn_frame, text=t.model_dialog.btn_cancel, command=self.destroy).pack(side="right")
+        ttk.Button(
+            btn_frame,
+            text=t.model_dialog.btn_select,
+            command=self._on_select,
+            style="Action.TButton",
+        ).pack(side="right", padx=(5, 0))
+        ttk.Button(
+            btn_frame,
+            text=t.model_dialog.btn_cancel,
+            command=self.destroy,
+            style="Action.TButton",
+        ).pack(side="right")
 
         self._populate()
 

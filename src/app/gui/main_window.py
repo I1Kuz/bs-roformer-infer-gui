@@ -8,7 +8,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import Any, final
 
-from app.audio.scanner import SUPPORTED_AUDIO_PATTERNS, scan_audio_files
+from app.audio.scanner import SUPPORTED_AUDIO_PATTERNS, SUPPORTED_EXTENSIONS, scan_audio_files
 from app.core.constants import GITHUB_REPO_URL
 from app.core.hardware import HardwareDetector
 from app.core.i18n import (
@@ -22,6 +22,7 @@ from app.core.paths import get_resources_dir
 from app.gui.dialogs.help_dialog import HelpDialog
 from app.gui.dialogs.model_selector import ModelSelectorDialog
 from app.gui.styles import (
+    BTN_WIDTH_PRIMARY,
     COLOR_ACCENT_BLUE,
     COLOR_BG_DARK,
     COLOR_STATUS_SUCCESS,
@@ -56,8 +57,17 @@ class MainWindow(tk.Tk):
 
         super().__init__()
         self.title(t.app_title)
-        self.geometry("980x820")
-        self.minsize(880, 660)
+
+        # Dynamic responsive window geometry based on available screen bounds
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        win_w = min(1000, max(800, int(screen_w * 0.70)))
+        win_h = min(840, max(600, int(screen_h * 0.85) - 60))
+        pos_x = max(0, (screen_w - win_w) // 2)
+        pos_y = max(0, (screen_h - win_h) // 2)
+
+        self.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y}")
+        self.minsize(min(800, win_w), min(560, win_h))
 
         # Set application icon
         icon_path = get_resources_dir() / "icons" / "app.ico"
@@ -72,14 +82,14 @@ class MainWindow(tk.Tk):
         self.hardware = HardwareDetector()
         self.queue_manager = QueueManager(self.settings, self._on_job_updated)
 
-        # Loading screen
+        # Loading screen (fluid relative layout)
         self.loading_frame = ttk.Frame(self)
         self.loading_frame.pack(fill="both", expand=True)
 
         self.center_frame = ttk.Frame(self.loading_frame)
-        self.center_frame.place(relx=0.5, rely=0.5, anchor="center")
+        self.center_frame.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.5)
 
-        self.loading_pb = ttk.Progressbar(self.center_frame, mode="indeterminate", length=320)
+        self.loading_pb = ttk.Progressbar(self.center_frame, mode="indeterminate")
         self.loading_pb.pack(fill="x", pady=(0, 8))
         self.loading_pb.start(10)
 
@@ -87,7 +97,6 @@ class MainWindow(tk.Tk):
         self.loading_lbl = ttk.Label(
             self.center_frame,
             textvariable=self.loading_lbl_var,
-            wraplength=420,
             justify="center",
         )
         self.loading_lbl.pack()
@@ -197,7 +206,7 @@ class MainWindow(tk.Tk):
         self.btn_help = ttk.Button(
             top_actions_frame,
             text=f"? {t.settings.help}",
-            width=11,
+            style="Header.TButton",
             command=self._show_help,
         )
         self.btn_help.pack(side="left", padx=(0, 8))
@@ -205,12 +214,12 @@ class MainWindow(tk.Tk):
         ttk.Button(
             top_actions_frame,
             text="GitHub",
-            width=8,
+            style="Header.TButton",
             command=lambda: webbrowser.open(GITHUB_REPO_URL),
         ).pack(side="left")
 
         # -------------------------------------------------------------
-        # 2. Folders Section
+        # 2. Files & Folders Section
         # -------------------------------------------------------------
         self.io_frame = ttk.LabelFrame(main_frame, text=t.folders.frame_title, padding=10)
         self.io_frame.pack(fill="x", pady=(0, 10))
@@ -221,18 +230,38 @@ class MainWindow(tk.Tk):
 
         norm_in = os.path.normpath(self.settings.input_folder) if self.settings.input_folder else ""
         self.in_var = tk.StringVar(value=norm_in)
-        ttk.Entry(self.io_frame, textvariable=self.in_var, state="readonly").grid(
-            row=0, column=1, sticky="ew", padx=6, pady=4
-        )
+        self.in_entry = ttk.Entry(self.io_frame, textvariable=self.in_var)
+        self.in_entry.grid(row=0, column=1, sticky="ew", padx=6, pady=4)
+        _ = self.in_entry.bind("<FocusOut>", self._on_in_folder_edited)
+        _ = self.in_entry.bind("<Return>", self._on_in_folder_edited)
 
         in_btns_frame = ttk.Frame(self.io_frame)
         in_btns_frame.grid(row=0, column=2, sticky="e", pady=4)
-        self.btn_browse_in = ttk.Button(in_btns_frame, text=t.folders.browse, width=12, command=self._browse_in)
+        self.btn_browse_in = ttk.Button(
+            in_btns_frame,
+            text=t.folders.browse,
+            style="Compact.TButton",
+            command=self._browse_in,
+        )
         self.btn_browse_in.pack(side="left", padx=(0, 4))
+        self.btn_add_files = ttk.Button(
+            in_btns_frame,
+            text=f"+ {t.folders.add_files}",
+            style="Compact.TButton",
+            command=self._on_add_files_clicked,
+        )
+        self.btn_add_files.pack(side="left", padx=(0, 4))
+        self.btn_rescan_in = ttk.Button(
+            in_btns_frame,
+            text="↻",
+            style="Icon.TButton",
+            command=self._rescan_input_folder,
+        )
+        self.btn_rescan_in.pack(side="left", padx=(0, 4))
         self.btn_open_in = ttk.Button(
             in_btns_frame,
             text="↗",
-            width=3,
+            style="Icon.TButton",
             command=lambda: self._open_dir_in_explorer(self.in_var.get()),
         )
         self.btn_open_in.pack(side="left")
@@ -250,12 +279,17 @@ class MainWindow(tk.Tk):
 
         out_btns_frame = ttk.Frame(self.io_frame)
         out_btns_frame.grid(row=1, column=2, sticky="e", pady=4)
-        self.btn_browse_out = ttk.Button(out_btns_frame, text=t.folders.browse, width=12, command=self._browse_out)
+        self.btn_browse_out = ttk.Button(
+            out_btns_frame,
+            text=t.folders.browse,
+            style="Compact.TButton",
+            command=self._browse_out,
+        )
         self.btn_browse_out.pack(side="left", padx=(0, 4))
         self.btn_open_out = ttk.Button(
             out_btns_frame,
             text="↗",
-            width=3,
+            style="Icon.TButton",
             command=lambda: self._open_dir_in_explorer(self.out_var.get()),
         )
         self.btn_open_out.pack(side="left")
@@ -323,7 +357,7 @@ class MainWindow(tk.Tk):
         self.btn_change_model = ttk.Button(
             model_content,
             text=t.model.change_model,
-            width=18,
+            style="Action.TButton",
             command=self._change_model,
         )
         self.btn_change_model.pack(side="right", padx=(10, 0))
@@ -379,12 +413,12 @@ class MainWindow(tk.Tk):
         format_combo.grid(row=1, column=3, sticky="w", pady=4, padx=5)
         _ = format_combo.bind("<<ComboboxSelected>>", lambda _: self._save_settings())
 
-        # Grid row 2: Overlap Slider
+        # Grid row 2: Overlap Slider (strictly in Column 1, proportional to combos, without pixel hardcode)
         self.lbl_overlap = ttk.Label(self.adv_frame, text=t.settings.overlap)
         self.lbl_overlap.grid(row=2, column=0, sticky="w", pady=(10, 4), padx=5)
 
         overlap_container = ttk.Frame(self.adv_frame)
-        overlap_container.grid(row=2, column=1, columnspan=3, sticky="ew", pady=(10, 4), padx=5)
+        overlap_container.grid(row=2, column=1, sticky="ew", pady=(10, 4), padx=5)
 
         self.lbl_speed = ttk.Label(overlap_container, text=t.settings.speed, font=("TkDefaultFont", 8))
         self.lbl_speed.pack(side="left")
@@ -397,11 +431,11 @@ class MainWindow(tk.Tk):
             variable=self.overlap_var,
             command=self._on_overlap_change,
         )
-        self.overlap_scale.pack(side="left", fill="x", expand=True, padx=10)
+        self.overlap_scale.pack(side="left", fill="x", expand=True, padx=8)
         _ = self.overlap_scale.bind("<ButtonRelease-1>", lambda _: self._save_settings())
 
         self.lbl_quality = ttk.Label(overlap_container, text=t.settings.quality, font=("TkDefaultFont", 8))
-        self.lbl_quality.pack(side="left", padx=(0, 10))
+        self.lbl_quality.pack(side="left", padx=(0, 4))
 
         _ = self.adv_frame.columnconfigure(3, weight=1)
 
@@ -410,7 +444,7 @@ class MainWindow(tk.Tk):
         # -------------------------------------------------------------
         self.queue_panel = QueuePanel(main_frame)
         self.queue_panel.queue_manager = self.queue_manager
-        self.queue_panel.on_add_files = self._on_add_files_clicked
+        self.queue_panel.on_files_dropped = self._on_paths_dropped
         self.queue_panel.pack(fill="both", expand=True, pady=(0, 12))
 
         # -------------------------------------------------------------
@@ -424,7 +458,7 @@ class MainWindow(tk.Tk):
             text=f"▶ {t.queue.start_transform}",
             command=self._start_stop_toggle,
             style="Accent.TButton",
-            width=22,
+            width=BTN_WIDTH_PRIMARY,
         )
         self.btn_start.pack(side="right")
 
@@ -443,7 +477,7 @@ class MainWindow(tk.Tk):
         self.hw_label = ttk.Label(status_frame, text=t.queue.gpu_detecting, font=("TkDefaultFont", 9))
         self.hw_label.pack(side="left")
 
-        self.progress_bar = ttk.Progressbar(status_frame, mode="indeterminate", length=180)
+        self.progress_bar = ttk.Progressbar(status_frame, mode="indeterminate")
         self.progress_bar.pack(side="right", padx=(10, 0))
 
     # ------------------------------------------------------------------
@@ -465,6 +499,7 @@ class MainWindow(tk.Tk):
         _ = self.io_frame.config(text=t.folders.frame_title)
         _ = self.lbl_in_folder.config(text=t.folders.input_folder)
         _ = self.btn_browse_in.config(text=t.folders.browse)
+        _ = self.btn_add_files.config(text=f"+ {t.folders.add_files}")
         _ = self.lbl_out_folder.config(text=t.folders.output_folder)
         _ = self.btn_browse_out.config(text=t.folders.browse)
         _ = self.chk_subfolder.config(text=t.folders.subfolder_per_track)
@@ -514,6 +549,19 @@ class MainWindow(tk.Tk):
             self.settings.input_folder = norm_d
             self._save_settings()
             self._scan_folder_into_queue(norm_d, clear_existing=True)
+
+    def _on_in_folder_edited(self, event: Any = None) -> None:
+        val = self.in_var.get().strip()
+        norm_d = os.path.normpath(val) if val else ""
+        if norm_d != self.settings.input_folder:
+            self.settings.input_folder = norm_d
+            self._save_settings()
+            if norm_d and Path(norm_d).is_dir():
+                self._scan_folder_into_queue(norm_d, clear_existing=True)
+
+    def _rescan_input_folder(self) -> None:
+        if self.settings.input_folder and Path(self.settings.input_folder).is_dir():
+            self._scan_folder_into_queue(self.settings.input_folder, clear_existing=True)
 
     def _browse_out(self) -> None:
         d = filedialog.askdirectory(initialdir=self.settings.output_folder)
@@ -577,6 +625,10 @@ class MainWindow(tk.Tk):
             self._save_settings()
             self._update_model_card()
             self.queue_manager.update_pending_model(self.settings.selected_model)
+            if not self.queue_manager.is_running:
+                has_pending = any(j.status == JobStatus.PENDING for j in self.queue_manager.jobs)
+                if not has_pending and self.settings.input_folder and Path(self.settings.input_folder).is_dir():
+                    self._scan_folder_into_queue(self.settings.input_folder, clear_existing=True)
 
     def _update_model_card(self) -> None:
         t = get_translations()
@@ -625,6 +677,29 @@ class MainWindow(tk.Tk):
                 if self.settings.create_subfolder_per_track:
                     target_out = str(Path(target_out) / Path(f).stem)
                 self.queue_manager.add_job(f, target_out, self.settings.selected_model)
+
+    def _on_paths_dropped(self, paths: list[str]) -> None:
+        audio_files: list[str] = []
+        for p in paths:
+            path_obj = Path(p)
+            if path_obj.is_dir():
+                audio_files.extend(scan_audio_files(str(path_obj)))
+            elif path_obj.is_file() and path_obj.suffix.lower() in SUPPORTED_EXTENSIONS:
+                audio_files.append(str(path_obj))
+
+        if not audio_files:
+            return
+
+        out_d = self._get_effective_output_dir()
+        existing_files = {j.input_file for j in self.queue_manager.jobs}
+        for f in audio_files:
+            if f in existing_files:
+                continue
+            target_out = out_d
+            if self.settings.create_subfolder_per_track:
+                target_out = str(Path(target_out) / Path(f).stem)
+            self.queue_manager.add_job(f, target_out, self.settings.selected_model)
+            existing_files.add(f)
 
     def _get_effective_output_dir(self) -> str:
         if self.settings.output_folder and Path(self.settings.output_folder).exists():
@@ -678,9 +753,9 @@ class MainWindow(tk.Tk):
         # Check if queue has jobs
         pending_jobs = [j for j in self.queue_manager.jobs if j.status == JobStatus.PENDING]
         if not pending_jobs:
-            # If queue is empty, attempt to scan input folder
-            if self.settings.input_folder and Path(self.settings.input_folder).exists():
-                self._scan_folder_into_queue(self.settings.input_folder, clear_existing=False)
+            # If queue has no pending jobs (empty or all finished), re-scan input folder
+            if self.settings.input_folder and Path(self.settings.input_folder).is_dir():
+                self._scan_folder_into_queue(self.settings.input_folder, clear_existing=True)
                 pending_jobs = [j for j in self.queue_manager.jobs if j.status == JobStatus.PENDING]
 
             if not pending_jobs:

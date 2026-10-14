@@ -26,6 +26,8 @@ class FoldersTranslations:
     input_folder: str
     output_folder: str
     browse: str
+    add_files: str
+    rescan: str
     open_folder: str
     subfolder_per_track: str
 
@@ -212,10 +214,12 @@ _EN_TRANSLATIONS = AppTranslations(
         worker_start_failed="Failed to start background worker process.",
     ),
     folders=FoldersTranslations(
-        frame_title="Folders",
+        frame_title="Files & Folders",
         input_folder="Input Folder:",
         output_folder="Output Folder:",
         browse="Browse...",
+        add_files="Add Files...",
+        rescan="Rescan Folder",
         open_folder="Open in Explorer",
         subfolder_per_track="Create a subfolder per track",
     ),
@@ -372,10 +376,12 @@ _UK_TRANSLATIONS = AppTranslations(
         worker_start_failed="Не вдалося запустити фоновий процес обробки.",
     ),
     folders=FoldersTranslations(
-        frame_title="Папки",
+        frame_title="Файли та папки",
         input_folder="Вхідна папка:",
         output_folder="Папка збереження:",
         browse="Огляд...",
+        add_files="Додати файли...",
+        rescan="Оновити папку",
         open_folder="Відкрити в Провіднику",
         subfolder_per_track="Створювати окрему папку для кожного треку",
     ),

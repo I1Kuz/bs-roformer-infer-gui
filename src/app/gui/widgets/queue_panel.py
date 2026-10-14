@@ -7,6 +7,7 @@ from tkinter import ttk
 from typing import TYPE_CHECKING, Any, final
 
 from app.core.i18n import get_translations
+from app.gui.utils import enable_file_drop
 from app.inference.job import Job, JobStatus
 
 if TYPE_CHECKING:
@@ -21,7 +22,7 @@ class QueuePanel(ttk.LabelFrame):
         self.jobs: dict[str, Job] = {}
         self.queue_manager: QueueManager | None = None
 
-        self.on_add_files: Callable[[], None] | None = None
+        self.on_files_dropped: Callable[[list[str]], None] | None = None
 
         # -------------------------------------------------------------
         # Action Toolbar
@@ -29,17 +30,11 @@ class QueuePanel(ttk.LabelFrame):
         self.toolbar: ttk.Frame = ttk.Frame(self)
         self.toolbar.pack(fill="x", pady=(0, 8))
 
-        self.btn_add_files = ttk.Button(
-            self.toolbar,
-            text=f"+ {t.queue.btn_add_files}",
-            command=self._trigger_add_files,
-        )
-        self.btn_add_files.pack(side="left", padx=(0, 6))
-
         self.btn_clear_all = ttk.Button(
             self.toolbar,
             text=t.queue.btn_clear_all,
             command=self.clear_all,
+            style="Action.TButton",
         )
         self.btn_clear_all.pack(side="right", padx=(6, 0))
 
@@ -47,6 +42,7 @@ class QueuePanel(ttk.LabelFrame):
             self.toolbar,
             text=t.queue.btn_clear_finished,
             command=self.clear_completed,
+            style="Action.TButton",
         )
         self.btn_clear_finished.pack(side="right")
 
@@ -64,10 +60,13 @@ class QueuePanel(ttk.LabelFrame):
         )
         self._setup_headings()
 
-        _ = self.tree.column("File", width=260, minwidth=150)
-        _ = self.tree.column("Model", width=180, minwidth=120)
-        _ = self.tree.column("Status", width=150, minwidth=100)
-        _ = self.tree.column("Progress", width=90, minwidth=70, anchor="center")
+        _ = self.tree.column("File", stretch=True, minwidth=150)
+        _ = self.tree.column("Model", stretch=False, width=170, minwidth=120)
+        _ = self.tree.column("Status", stretch=False, width=140, minwidth=100)
+        _ = self.tree.column("Progress", stretch=False, width=90, minwidth=70, anchor="center")
+
+        enable_file_drop(self.tree, self._on_tree_drop)
+        enable_file_drop(self.tree_container, self._on_tree_drop)
 
         scroll_y = ttk.Scrollbar(self.tree_container, orient="vertical", command=self._on_scroll)
         _ = self.tree.configure(yscrollcommand=scroll_y.set)  # type: ignore[arg-type]
@@ -125,9 +124,9 @@ class QueuePanel(ttk.LabelFrame):
         self.tree.heading("Status", text=t.queue.col_status)
         self.tree.heading("Progress", text=t.queue.col_progress)
 
-    def _trigger_add_files(self) -> None:
-        if self.on_add_files:
-            self.on_add_files()
+    def _on_tree_drop(self, paths: list[str]) -> None:
+        if self.on_files_dropped:
+            self.on_files_dropped(paths)
 
     def _update_empty_state(self) -> None:
         if len(self.jobs) == 0:
@@ -154,7 +153,6 @@ class QueuePanel(ttk.LabelFrame):
         t = get_translations()
         _ = self.config(text=t.queue.frame_title)
         self._setup_headings()
-        _ = self.btn_add_files.config(text=f"+ {t.queue.btn_add_files}")
         _ = self.btn_clear_finished.config(text=t.queue.btn_clear_finished)
         _ = self.btn_clear_all.config(text=t.queue.btn_clear_all)
         _ = self.empty_title_lbl.config(text=t.queue.empty_title)

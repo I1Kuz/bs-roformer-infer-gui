@@ -19,12 +19,15 @@ class HelpDialog(tk.Toplevel):
         t = get_translations()
         self.title(t.help_dialog.title)
 
-        width, height = 720, 620
         parent.update_idletasks()
-        x = parent.winfo_x() + (parent.winfo_width() - width) // 2
-        y = parent.winfo_y() + (parent.winfo_height() - height) // 2
+        pw = max(640, parent.winfo_width())
+        ph = max(500, parent.winfo_height())
+        width = min(780, max(560, int(pw * 0.85)))
+        height = min(680, max(460, int(ph * 0.82)))
+        x = max(0, parent.winfo_x() + (pw - width) // 2)
+        y = max(0, parent.winfo_y() + (ph - height) // 2)
         self.geometry(f"{width}x{height}+{x}+{y}")
-        self.minsize(640, 500)
+        self.minsize(min(540, width), min(420, height))
         self.transient(parent)
         _ = self.grab_set()
 
@@ -60,12 +63,14 @@ class HelpDialog(tk.Toplevel):
         ttk.Button(
             btn_box,
             text="GitHub",
+            style="Action.TButton",
             command=lambda: webbrowser.open(GITHUB_REPO_URL),
         ).pack(side="left", padx=(0, 8))
 
         ttk.Button(
             btn_box,
             text=t.queue.action_open_folder,
+            style="Action.TButton",
             command=self._open_prog_folder,
         ).pack(side="left")
 
@@ -81,7 +86,12 @@ class HelpDialog(tk.Toplevel):
         bottom_frame = ttk.Frame(main_frame)
         bottom_frame.pack(fill="x", pady=(15, 0))
 
-        ttk.Button(bottom_frame, text=t.help_dialog.btn_close, command=self.destroy).pack(side="right")
+        ttk.Button(
+            bottom_frame,
+            text=t.help_dialog.btn_close,
+            style="Action.TButton",
+            command=self.destroy,
+        ).pack(side="right")
 
         self.deiconify()
 
