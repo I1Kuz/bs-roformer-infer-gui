@@ -3,6 +3,11 @@ name = "bs-roformer-infer-gui"
 version = "0.1.0"
 description = "BS-RoFormer Infer Studio GUI"
 readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+authors = [
+    { name = "I1Kuz", email = "i1marqueeit@gmail.com" }
+]
+urls = { Repository = "https://github.com/I1Kuz/bs-roformer-infer-gui" }
 requires-python = "==3.12.*"
 dependencies = [
     "sv-ttk",

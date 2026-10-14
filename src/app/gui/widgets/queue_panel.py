@@ -58,7 +58,7 @@ class QueuePanel(ttk.LabelFrame):
             self.tree_container,
             columns=("File", "Model", "Status", "Progress"),
             show="headings",
-            height=9,
+            height=6,
         )
         self._setup_headings()
 

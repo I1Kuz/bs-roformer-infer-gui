@@ -74,17 +74,9 @@ class HelpDialog(tk.Toplevel):
             command=self._open_prog_folder,
         ).pack(side="left")
 
-        # Tabbed Notebook
-        self.notebook = ttk.Notebook(main_frame)
-        self.notebook.pack(fill="both", expand=True)
-
-        self._add_tab(self.notebook, t.help_dialog.tab_quickstart, t.help_dialog.quickstart_content)
-        self._add_tab(self.notebook, t.help_dialog.tab_settings, t.help_dialog.settings_content)
-        self._add_tab(self.notebook, t.help_dialog.tab_models, t.help_dialog.models_content)
-
-        # Bottom row with Close button
+        # Bottom row with Close button (anchored to bottom)
         bottom_frame = ttk.Frame(main_frame)
-        bottom_frame.pack(fill="x", pady=(15, 0))
+        bottom_frame.pack(side="bottom", fill="x", pady=(12, 0))
 
         ttk.Button(
             bottom_frame,
@@ -92,6 +84,14 @@ class HelpDialog(tk.Toplevel):
             style="Action.TButton",
             command=self.destroy,
         ).pack(side="right")
+
+        # Tabbed Notebook (takes remaining vertical space)
+        self.notebook = ttk.Notebook(main_frame)
+        self.notebook.pack(fill="both", expand=True)
+
+        self._add_tab(self.notebook, t.help_dialog.tab_quickstart, t.help_dialog.quickstart_content)
+        self._add_tab(self.notebook, t.help_dialog.tab_settings, t.help_dialog.settings_content)
+        self._add_tab(self.notebook, t.help_dialog.tab_models, t.help_dialog.models_content)
 
         self.deiconify()
 

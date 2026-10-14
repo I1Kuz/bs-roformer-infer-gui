@@ -169,7 +169,29 @@ class MainWindow(tk.Tk):
 
     def _build_ui(self) -> None:
         t = get_translations()
-        main_frame = ttk.Frame(self, padding=(20, 15, 20, 15))
+
+        # -------------------------------------------------------------
+        # Status Bar (always anchored to the bottom of the window)
+        # -------------------------------------------------------------
+        status_frame = ttk.Frame(self, padding=(10, 4, 10, 6))
+        status_frame.pack(side="bottom", fill="x")
+
+        self.status_var = tk.StringVar(value=t.queue.ready)
+        self.status_lbl = ttk.Label(status_frame, textvariable=self.status_var, font=("TkDefaultFont", 9, "bold"))
+        self.status_lbl.pack(side="left")
+
+        ttk.Separator(status_frame, orient="vertical").pack(side="left", fill="y", padx=12, pady=2)
+
+        self.hw_label = ttk.Label(status_frame, text=t.queue.gpu_detecting, font=("TkDefaultFont", 9))
+        self.hw_label.pack(side="left")
+
+        self.progress_bar = ttk.Progressbar(status_frame, mode="indeterminate")
+        self.progress_bar.pack(side="right", padx=(10, 0))
+
+        # -------------------------------------------------------------
+        # Main Content Frame
+        # -------------------------------------------------------------
+        main_frame = ttk.Frame(self, padding=(20, 15, 20, 10))
         main_frame.pack(fill="both", expand=True)
 
         # -------------------------------------------------------------
@@ -278,21 +300,21 @@ class MainWindow(tk.Tk):
         _ = self.out_entry.bind("<Return>", self._on_out_folder_edited)
 
         out_btns_frame = ttk.Frame(self.io_frame)
-        out_btns_frame.grid(row=1, column=2, sticky="e", pady=4)
+        out_btns_frame.grid(row=1, column=2, sticky="ew", pady=4)
         self.btn_browse_out = ttk.Button(
             out_btns_frame,
             text=t.folders.browse,
             style="Compact.TButton",
             command=self._browse_out,
         )
-        self.btn_browse_out.pack(side="left", padx=(0, 4))
+        self.btn_browse_out.pack(side="left")
         self.btn_open_out = ttk.Button(
             out_btns_frame,
             text="↗",
             style="Icon.TButton",
             command=lambda: self._open_dir_in_explorer(self.out_var.get()),
         )
-        self.btn_open_out.pack(side="left")
+        self.btn_open_out.pack(side="right")
 
         _ = self.io_frame.columnconfigure(1, weight=1)
 
@@ -440,18 +462,10 @@ class MainWindow(tk.Tk):
         _ = self.adv_frame.columnconfigure(3, weight=1)
 
         # -------------------------------------------------------------
-        # 5. Processing Queue Section
-        # -------------------------------------------------------------
-        self.queue_panel = QueuePanel(main_frame)
-        self.queue_panel.queue_manager = self.queue_manager
-        self.queue_panel.on_files_dropped = self._on_paths_dropped
-        self.queue_panel.pack(fill="both", expand=True, pady=(0, 12))
-
-        # -------------------------------------------------------------
-        # 6. Action Bar & Transform Control
+        # 6. Action Bar & Transform Control (anchored to bottom of main_frame)
         # -------------------------------------------------------------
         action_bar = ttk.Frame(main_frame)
-        action_bar.pack(fill="x", pady=(0, 4))
+        action_bar.pack(side="bottom", fill="x", pady=(8, 0))
 
         self.btn_start = ttk.Button(
             action_bar,
@@ -463,22 +477,12 @@ class MainWindow(tk.Tk):
         self.btn_start.pack(side="right")
 
         # -------------------------------------------------------------
-        # 7. Status Bar
+        # 5. Processing Queue Section (takes all remaining space)
         # -------------------------------------------------------------
-        status_frame = ttk.Frame(self, padding=(10, 4, 10, 6))
-        status_frame.pack(fill="x", side="bottom")
-
-        self.status_var = tk.StringVar(value=t.queue.ready)
-        self.status_lbl = ttk.Label(status_frame, textvariable=self.status_var, font=("TkDefaultFont", 9, "bold"))
-        self.status_lbl.pack(side="left")
-
-        ttk.Separator(status_frame, orient="vertical").pack(side="left", fill="y", padx=12, pady=2)
-
-        self.hw_label = ttk.Label(status_frame, text=t.queue.gpu_detecting, font=("TkDefaultFont", 9))
-        self.hw_label.pack(side="left")
-
-        self.progress_bar = ttk.Progressbar(status_frame, mode="indeterminate")
-        self.progress_bar.pack(side="right", padx=(10, 0))
+        self.queue_panel = QueuePanel(main_frame)
+        self.queue_panel.queue_manager = self.queue_manager
+        self.queue_panel.on_files_dropped = self._on_paths_dropped
+        self.queue_panel.pack(fill="both", expand=True, pady=(0, 4))
 
     # ------------------------------------------------------------------
     # Settings & Localization

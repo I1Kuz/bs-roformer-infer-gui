@@ -45,9 +45,9 @@ class ModelSelectorDialog(tk.Toplevel):
         self.tree.heading("Category", text=t.model_dialog.col_category)
         self.tree.heading("Installed", text=t.model_dialog.col_installed)
 
-        _ = self.tree.column("Name", stretch=True)
-        _ = self.tree.column("Category", stretch=False, width=140)
-        _ = self.tree.column("Installed", stretch=False, width=100)
+        _ = self.tree.column("Name", stretch=True, minwidth=220)
+        _ = self.tree.column("Category", stretch=False, width=130, minwidth=100)
+        _ = self.tree.column("Installed", stretch=False, width=175, minwidth=150)
 
         self.tree.pack(fill="both", expand=True, padx=10, pady=5)
 
