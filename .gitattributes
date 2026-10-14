@@ -1,0 +1,18 @@
+# Auto-detect text files and normalize line endings to LF
+* text=auto
+
+# Windows scripts and installer files require CRLF line endings
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.iss text eol=crlf
+
+# Common binary formats
+*.ico binary
+*.png binary
+*.pdn binary
+*.zip binary
+*.onnx binary
+*.pt binary
+*.th binary
+*.ckpt binary

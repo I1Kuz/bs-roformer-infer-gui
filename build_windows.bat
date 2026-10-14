@@ -14,7 +14,11 @@ if not exist ".venv\Scripts\python.exe" (
 
 echo Installing build dependencies...
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python.exe -m pip install pyinstaller
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Failed to install build dependencies.
+    pause
+    exit /b %ERRORLEVEL%
+)
 
 echo Running PyInstaller...
 .\.venv\Scripts\python.exe -m PyInstaller --noconfirm --onedir --windowed ^
@@ -24,8 +28,13 @@ echo Running PyInstaller...
     --add-data "resources;resources" ^
     --add-data "src\app;app" ^
     --collect-data sv_ttk ^
-    --collect-data tkinter ^
     src\app\main.py
+if %ERRORLEVEL% neq 0 (
+    echo.
+    echo [ERROR] PyInstaller build failed with exit code %ERRORLEVEL%.
+    pause
+    exit /b %ERRORLEVEL%
+)
 
 echo.
 echo Build finished! Output directory: dist\BS-RoFormer-Infer Studio
