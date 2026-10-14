@@ -14,8 +14,8 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 
-echo Synchronizing dependencies via uv sync...
-uv sync --no-dev
+echo Synchronizing dependencies via uv sync (Python 3.12 with CUDA acceleration)...
+uv sync --python 3.12 --no-dev
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to synchronize dependencies.
     pause

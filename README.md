@@ -37,7 +37,7 @@ bs-roformer-infer-gui/
 ## Requirements
 
 - Windows 10 or 11
-- Python 3.12+ (for development / running from source)
+- Python 3.12 (3.12.15 standardized for PyTorch CUDA support)
 - An NVIDIA GPU with CUDA support is strongly recommended for practical performance; CPU fallback is supported but slow
 
 ## Development Setup
@@ -46,13 +46,11 @@ bs-roformer-infer-gui/
 git clone https://github.com/I1Kuz/bs-roformer-infer-gui
 cd bs-roformer-infer-gui
 
-:: Create a virtual environment and install dev dependencies
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements-dev.txt
+:: Sync dependencies using uv (automatically configures Python 3.12 and PyTorch CUDA)
+uv sync
 
 :: Run from source
-python src/app/main.py
+run_windows.bat
 ```
 
 ## Testing & Quality Assurance

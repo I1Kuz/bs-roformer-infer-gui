@@ -3,11 +3,13 @@ name = "bs-roformer-infer-gui"
 version = "0.1.0"
 description = "BS-RoFormer Infer Studio GUI"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = "==3.12.*"
 dependencies = [
     "sv-ttk",
     "pywinstyles",
     "bs-roformer-infer>=0.1.5",
+    "torch",
+    "torchaudio",
 ]
 
 [dependency-groups]
@@ -21,6 +23,15 @@ dev = [
 
 [tool.uv]
 package = false
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
+torchaudio = { index = "pytorch-cu124" }
 
 [tool.ruff]
 target-version = "py312"
