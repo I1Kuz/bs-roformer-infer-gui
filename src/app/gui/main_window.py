@@ -56,8 +56,8 @@ class MainWindow(tk.Tk):
 
         super().__init__()
         self.title(t.app_title)
-        self.geometry("980x880")
-        self.minsize(960, 840)
+        self.geometry("980x820")
+        self.minsize(880, 660)
 
         # Set application icon
         icon_path = get_resources_dir() / "icons" / "app.ico"

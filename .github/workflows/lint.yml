@@ -1,5 +1,5 @@
-name: Lint & Type Check
-
+name: CI
+ 
 on:
   push:
     branches: ["main", "master"]
@@ -7,7 +7,7 @@ on:
     branches: ["main", "master"]
 
 jobs:
-  lint:
+  test:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,7 +21,11 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Run ruff
-        run: ruff check src/
+        run: ruff check src/ tests/
 
       - name: Run basedpyright
         run: basedpyright
+
+      - name: Run tests
+        run: pytest
+

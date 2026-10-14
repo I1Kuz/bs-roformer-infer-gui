@@ -55,14 +55,17 @@ pip install -r requirements-dev.txt
 python src/app/main.py
 ```
 
-## Linting & Type Checking
+## Testing & Quality Assurance
 
 ```bat
 :: Linter
-.venv\Scripts\ruff check src/
+.venv\Scripts\ruff check src/ tests/
 
 :: Type checker (strict basedpyright)
 .venv\Scripts\basedpyright
+
+:: Unit tests
+.venv\Scripts\pytest
 ```
 
 ## Build Executable
@@ -86,8 +89,14 @@ The compiled `.exe` will be in the `dist/` directory.
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/your-feature`)
-3. Ensure `ruff check src/` and `basedpyright` both pass with zero errors
+3. Ensure `ruff check`, `basedpyright`, and `pytest` all pass with zero errors
 4. Open a pull request
+
+## Credits & Acknowledgments
+
+- **[Band-Split RoFormer](https://github.com/lucidrains/BS-RoFormer)** — Original architecture by Wei-Tsung Lu et al., implemented by Phil Wang ([@lucidrains](https://github.com/lucidrains)).
+- **[bs-roformer-infer](https://github.com/openmirlab/bs-roformer-infer)** — High-performance inference engine by [OpenMirLab](https://github.com/openmirlab).
+- **[Sun Valley ttk Theme](https://github.com/rdbende/Sun-Valley-ttk-theme)** — Modern dark theme for Tkinter by [@rdbende](https://github.com/rdbende).
 
 ## License
 

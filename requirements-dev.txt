@@ -3,3 +3,4 @@ pyinstaller
 basedpyright
 ruff
 types-PyYAML
+pytest>=8.0.0
