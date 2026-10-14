@@ -1,10 +1,12 @@
+from __future__ import annotations
+
+import re
 import sys
 import tkinter as tk
 import webbrowser
 from tkinter import ttk
-from typing import final
+from typing import Any, final
 
-from app.core.constants import GITHUB_REPO_URL
 from app.core.i18n import get_translations
 from app.core.paths import get_app_data_dir
 from app.gui.styles import COLOR_BG_DARK, COLOR_BG_INPUT, COLOR_TEXT_LIGHT
@@ -62,13 +64,6 @@ class HelpDialog(tk.Toplevel):
 
         ttk.Button(
             btn_box,
-            text="GitHub",
-            style="Action.TButton",
-            command=lambda: webbrowser.open(GITHUB_REPO_URL),
-        ).pack(side="left", padx=(0, 8))
-
-        ttk.Button(
-            btn_box,
             text=t.queue.action_open_folder,
             style="Action.TButton",
             command=self._open_prog_folder,
@@ -92,6 +87,7 @@ class HelpDialog(tk.Toplevel):
         self._add_tab(self.notebook, t.help_dialog.tab_quickstart, t.help_dialog.quickstart_content)
         self._add_tab(self.notebook, t.help_dialog.tab_settings, t.help_dialog.settings_content)
         self._add_tab(self.notebook, t.help_dialog.tab_models, t.help_dialog.models_content)
+        self._add_tab(self.notebook, t.help_dialog.tab_about, t.help_dialog.about_content)
 
         self.deiconify()
 
@@ -122,6 +118,37 @@ class HelpDialog(tk.Toplevel):
         scroll.pack(side="right", fill="y")
 
         text_widget.insert("1.0", content)
+
+        # Highlight URLs and make them clickable
+        _ = text_widget.tag_configure("hyperlink", foreground="#4cc2ff", underline=True)
+
+        url_pattern = re.compile(r"https?://[^\s)]+")
+        url_map: dict[str, str] = {}
+        for idx, match in enumerate(url_pattern.finditer(content)):
+            raw_url = match.group(0).rstrip(".,;")
+            tag_name = f"link_{idx}"
+            start_pos = f"1.0 + {match.start()} chars"
+            end_pos = f"1.0 + {match.start() + len(raw_url)} chars"
+            text_widget.tag_add(tag_name, start_pos, end_pos)
+            text_widget.tag_add("hyperlink", start_pos, end_pos)
+            url_map[tag_name] = raw_url
+
+        if url_map:
+            def _on_click(event: tk.Event[Any]) -> None:
+                index = text_widget.index(f"@{event.x},{event.y}")
+                for tag in text_widget.tag_names(index):
+                    if tag in url_map:
+                        _ = webbrowser.open(url_map[tag])
+                        break
+
+            def _on_motion(event: tk.Event[Any]) -> None:
+                index = text_widget.index(f"@{event.x},{event.y}")
+                has_link = any(tag in url_map for tag in text_widget.tag_names(index))
+                _ = text_widget.configure(cursor="hand2" if has_link else "")
+
+            _ = text_widget.bind("<Button-1>", _on_click)
+            _ = text_widget.bind("<Motion>", _on_motion)
+
         _ = text_widget.configure(state="disabled")
 
     def _open_prog_folder(self) -> None:

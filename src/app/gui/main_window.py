@@ -2,14 +2,12 @@ import os
 import sys
 import threading
 import tkinter as tk
-import webbrowser
 from collections.abc import Callable
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import Any, final
 
 from app.audio.scanner import SUPPORTED_AUDIO_PATTERNS, SUPPORTED_EXTENSIONS, scan_audio_files
-from app.core.constants import GITHUB_REPO_URL
 from app.core.hardware import HardwareDetector
 from app.core.i18n import (
     LANGUAGE_DISPLAY_NAMES,
@@ -231,14 +229,7 @@ class MainWindow(tk.Tk):
             style="Header.TButton",
             command=self._show_help,
         )
-        self.btn_help.pack(side="left", padx=(0, 8))
-
-        ttk.Button(
-            top_actions_frame,
-            text="GitHub",
-            style="Header.TButton",
-            command=lambda: webbrowser.open(GITHUB_REPO_URL),
-        ).pack(side="left")
+        self.btn_help.pack(side="left")
 
         # -------------------------------------------------------------
         # 2. Files & Folders Section

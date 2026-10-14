@@ -129,9 +129,11 @@ class HelpDialogTranslations:
     tab_quickstart: str
     tab_settings: str
     tab_models: str
+    tab_about: str
     quickstart_content: str
     settings_content: str
     models_content: str
+    about_content: str
 
 
 @final
@@ -153,22 +155,70 @@ class AppTranslations:
 # ---------------------------------------------------------------------------
 
 _EN_QUICKSTART = """Welcome to BS-RoFormer Infer Studio!
+High-performance desktop workstation for AI audio source separation.
 
-1. Select or Add Audio Files:
-   • Click "Add Files..." to queue individual audio files (.mp3, .wav, .flac, .ogg, .m4a), OR
-   • Select an Input Folder to automatically queue all audio files inside it.
+1. Adding Audio Files:
+   • Add Files: Click "Add Files..." to browse and queue specific audio files (.wav, .mp3, .flac, .ogg, .m4a, .aiff, .wma).
+   • Input Folder: Choose an Input Folder and click "Rescan Folder" to automatically load all supported tracks.
+   • Drag-and-Drop: Drag audio files or folders directly from Windows Explorer into the Queue panel.
+   • Subfolders Option: Enable "Create a subfolder per track" to organize separated stems into neat subdirectories.
 
-2. Choose Target Model:
-   • Click "Change Model..." to select from fine-tuned neural models.
-   • Models are available for vocals, instrumental, karaoke, de-reverb, and multi-stem separation.
+2. Model Selection:
+   • Click "Change Model..." to select from 10 high-precision neural separation models:
+     - Vocals & Instrumental (BS-RoFormer & Mel-Band RoFormer)
+     - Karaoke (Lead vocal isolation while preserving background backing vocals)
+     - De-Reverb (Acoustic room reflection & dry signal restoration)
+     - Multi-Stem (Splitting into 4 or 6 discrete instrument stems: Vocals, Drums, Bass, etc.)
+   • Automatic Download: Models download and verify automatically into local storage on first use.
 
-3. Pick Output Destination:
-   • Set the Output Folder.
-   • Optionally enable "Create a subfolder per track" to keep separated stems tidy.
+3. Hardware & Quality Settings:
+   • Device: CUDA (NVIDIA GPU with real-time VRAM detection) or CPU fallback.
+   • VRAM Limit: 0 for Auto, or set a custom GB ceiling when running other GPU apps.
+   • Chunk Size: Choose from Auto, Small (~3GB), Medium (~4GB), Big (~6GB), or Huge (~8+ GB).
+   • Overlap Slider: Adjust cross-fade overlap from 2x (fastest throughput) to 8x (studio mastering fidelity).
+   • Export Format: WAV 32-bit Float (maximum dynamic range), WAV 24-bit, WAV 16-bit, FLAC (lossless), or MP3 (320kbps).
 
-4. Start Separation:
-   • Click "Start Transform" to process the queue with GPU acceleration.
-   • Monitor progress bars for each track in real time.
+4. Queue & Processing Controls:
+   • Start / Stop: Click "Start Transform" to process the queue. Stop safely at any time.
+   • Live Progress: Track percent progress, elapsed timer, and status (Pending, Downloading, Transforming, Finished, Failed).
+   • Context Menu: Right-click any track in the queue to Open File, Show in Folder, Open Output Folder, Move to Top, or Remove.
+   • Queue Management: Use "Clear Finished" or "Clear All" to maintain your queue.
+   • Non-Blocking Engine: The interface remains completely responsive while the background worker processes audio.
+"""
+
+_EN_ABOUT = """BS-RoFormer Infer Studio
+High-Performance Audio Source Separation Desktop Application
+
+Author & Maintainer:
+• I1Kuz
+  GitHub: https://github.com/I1Kuz
+  Project Repository: https://github.com/I1Kuz/bs-roformer-infer-gui
+
+Original Model Architecture & Training:
+• Band-Split RoFormer (BS-RoFormer):
+  Wei-Tsung Lu et al. (ByteDance)
+• PyTorch Architecture Implementation:
+  Phil Wang (@lucidrains) — https://github.com/lucidrains/BS-RoFormer
+• Model Checkpoints & Music Source Separation Training:
+  Roman Solovyev (ZFTurbo) & Alexander Stempkovskiy
+  Repository: https://github.com/ZFTurbo/Music-Source-Separation-Training
+• High-Performance Inference Engine:
+  OpenMirLab — https://github.com/openmirlab/bs-roformer-infer
+
+User Interface & Windows Styling:
+• Sun Valley ttk Theme (sv-ttk):
+  rdbende — https://github.com/rdbende/Sun-Valley-ttk-theme
+• Windows Modern DWM & Dark Titlebar (pywinstyles):
+  Akascape — https://github.com/Akascape/py-window-styles
+
+Core Machine Learning & Audio Libraries:
+• PyTorch & CUDA Toolkit:
+  PyTorch Foundation — https://pytorch.org
+• Torchaudio, SoundFile, Librosa, NumPy
+
+License:
+• GNU General Public License v3.0 (GPL-3.0)
+• Free and open-source software under the terms of GPL-3.0.
 """
 
 _EN_SETTINGS_GUIDE = """VRAM & Hardware:
@@ -303,9 +353,11 @@ _EN_TRANSLATIONS = AppTranslations(
         tab_quickstart="Quick Start",
         tab_settings="Audio & Quality",
         tab_models="Models & Formats",
+        tab_about="About",
         quickstart_content=_EN_QUICKSTART,
         settings_content=_EN_SETTINGS_GUIDE,
         models_content=_EN_MODELS_GUIDE,
+        about_content=_EN_ABOUT,
     ),
 )
 
@@ -315,22 +367,70 @@ _EN_TRANSLATIONS = AppTranslations(
 # ---------------------------------------------------------------------------
 
 _UK_QUICKSTART = """Ласкаво просимо до BS-RoFormer Infer Studio!
+Високопродуктивна робоча станція для нейромережевого розділення аудіодоріжок.
 
-1. Додайте аудіофайли:
-   • Натисніть «Додати файли...» для вибору окремих треків (.mp3, .wav, .flac, .ogg, .m4a), АБО
-   • Оберіть «Вхідну папку», щоб автоматично додати всі знайдені файли до черги.
+1. Додавання аудіофайлів:
+   • Додати файли: Натисніть «Додати файли...», щоб обрати окремі треки (.wav, .mp3, .flac, .ogg, .m4a, .aiff, .wma).
+   • Вхідна папка: Вкажіть вхідну папку та натисніть «Оновити папку» для автоматичного додавання знайдених аудіофайлів.
+   • Перетягування (Drag-and-Drop): Перетягуйте файли або цілі папки безпосередньо з Провідника Windows у список черги.
+   • Підпапки: Увімкніть «Створювати окрему папку для кожного треку», щоб зберігати розділені доріжки у персональних підкаталогах.
 
-2. Оберіть нейромережеву модель:
-   • Натисніть «Змінити модель...», щоб обрати підготовлену модель.
-   • Доступні моделі для виділення вокалу, інструменталу, караоке, де-реверберації та мультитреків.
+2. Вибір нейромережевої моделі:
+   • Натисніть «Змінити модель...», щоб обрати одну з 10 моделей:
+     - Вокал та Інструментал (BS-RoFormer та Mel-Band RoFormer)
+     - Караоке (ізоляція лід-вокалу зі збереженням бек-вокалу)
+     - Де-реверберація (очищення запису від луни та акустики приміщення)
+     - Мульти-трек (розподіл на 4 або 6 окремих доріжок: вокал, бас, ударні тощо)
+   • Автозавантаження: Обрані моделі автоматично завантажуються та верифікуються при першому використанні.
 
-3. Вкажіть папку для збереження:
-   • Оберіть «Папку збереження».
-   • За бажанням увімкніть «Створювати окрему папку для кожного треку».
+3. Параметри заліза та якості:
+   • Пристрій: CUDA (NVIDIA GPU з моніторингом VRAM) або резервний режим CPU.
+   • Ліміт VRAM: 0 для автоматичного визначення, або вкажіть ліміт (у ГБ) для контролю споживання пам'яті.
+   • Розмір чанка: Auto (адаптивний), Small (~3GB), Medium (~4GB), Big (~6GB) або Huge (~8+ GB).
+   • Слайдер перекриття: Регулюйте від 2x (максимальна швидкість) до 8x (ідеальне студійне склеювання без артефактів).
+   • Формат експорту: WAV 32-bit Float (максимальний динамічний діапазон), WAV 24-bit, WAV 16-bit, FLAC (без втрат) або MP3 (320 кбіт/с).
 
-4. Запустіть обробку:
-   • Натисніть акцентну кнопку «Розпочати обробку».
-   • Прогрес кожного треку відображатиметься в реальному часі.
+4. Черга та пакетна обробка:
+   • Запуск та зупинка: Кнопка «Розпочати обробку» запускає чергу. Зупинити процес можна в будь-який момент без збоїв.
+   • Моніторинг у реальному часі: Відстеження прогресу (%), таймера та статусу (В черзі, Завантаження, Обробка, Завершено, Помилка).
+   • Контекстне меню: Клікніть правою кнопкою миші по треку для швидких дій (Відкрити файл, Показати у папці, Відкрити папку збереження, На початок черги або Видалити).
+   • Керування чергою: Кнопки «Очистити завершені» та «Очистити все».
+   • Асинхронний воркер: Інтерфейс ніколи не зависає та залишається чуйним, оскільки обробка виконується в окремому ізольованому процесі.
+"""
+
+_UK_ABOUT = """BS-RoFormer Infer Studio
+Десктопна студія для нейромережевого розділення аудіодоріжок
+
+Автор та розробник:
+• I1Kuz
+  GitHub: https://github.com/I1Kuz
+  Репозиторій проекту: https://github.com/I1Kuz/bs-roformer-infer-gui
+
+Оригінальна архітектура моделей та навчання:
+• Архітектура Band-Split RoFormer (BS-RoFormer):
+  Wei-Tsung Lu та співавтори (ByteDance)
+• Реалізація архітектури на PyTorch:
+  Phil Wang (@lucidrains) — https://github.com/lucidrains/BS-RoFormer
+• Контрольні точки моделей та навчання Music Source Separation Training:
+  Roman Solovyev (ZFTurbo) та Alexander Stempkovskiy
+  Репозиторій: https://github.com/ZFTurbo/Music-Source-Separation-Training
+• Високопродуктивний рушій інференсу:
+  OpenMirLab — https://github.com/openmirlab/bs-roformer-infer
+
+Користувацький інтерфейс та інтеграція з Windows:
+• Тема оформлення Sun Valley ttk (sv-ttk):
+  rdbende — https://github.com/rdbende/Sun-Valley-ttk-theme
+• Стилізація заголовка та DWM Windows (pywinstyles):
+  Akascape — https://github.com/Akascape/py-window-styles
+
+Машинне навчання та аудіо-бібліотеки:
+• PyTorch & CUDA Toolkit:
+  PyTorch Foundation — https://pytorch.org
+• Torchaudio, SoundFile, Librosa, NumPy
+
+Ліцензія:
+• GNU General Public License v3.0 (GPL-3.0)
+• Вільне програмне забезпечення з відкритим вихідним кодом згідно з умовами ліцензії GPL-3.0.
 """
 
 _UK_SETTINGS_GUIDE = """Відеопам'ять (VRAM) та обладнання:
@@ -465,9 +565,11 @@ _UK_TRANSLATIONS = AppTranslations(
         tab_quickstart="Швидкий старт",
         tab_settings="Якість та звук",
         tab_models="Моделі та формати",
+        tab_about="Про програму",
         quickstart_content=_UK_QUICKSTART,
         settings_content=_UK_SETTINGS_GUIDE,
         models_content=_UK_MODELS_GUIDE,
+        about_content=_UK_ABOUT,
     ),
 )
 
