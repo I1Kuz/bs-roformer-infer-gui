@@ -12,8 +12,14 @@ if not exist ".venv\Scripts\python.exe" (
     exit /b 1
 )
 
-echo Installing build dependencies...
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+where.exe uv >nul 2>nul
+if %ERRORLEVEL% equ 0 (
+    echo Syncing build dependencies via uv sync...
+    uv sync
+) else (
+    echo Installing build dependencies...
+    .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+)
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to install build dependencies.
     pause
