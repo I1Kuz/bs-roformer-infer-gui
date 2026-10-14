@@ -4,6 +4,7 @@ import sys
 import tkinter as tk
 
 from app.core.logging import get_logger
+from app.gui.styles import COLOR_BG_DARK
 
 logger = get_logger(__name__)
 
@@ -27,7 +28,7 @@ def apply_dark_titlebar(window: tk.Tk | tk.Toplevel) -> None:
 
         version = sys.getwindowsversion()
         if version.major == 10 and version.build >= 22000:
-            _ = pywinstyles.change_header_color(window, "#1c1c1c")
+            _ = pywinstyles.change_header_color(window, COLOR_BG_DARK)
         elif version.major == 10:
             _ = pywinstyles.apply_style(window, "dark")
             _ = window.wm_attributes("-alpha", 0.99)  # type: ignore[attr-defined]

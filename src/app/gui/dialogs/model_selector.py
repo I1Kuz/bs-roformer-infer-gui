@@ -3,6 +3,7 @@ from tkinter import ttk
 from typing import final
 
 from app.core.i18n import get_translations
+from app.gui.styles import COLOR_BG_DARK
 from app.gui.utils import apply_dark_titlebar
 from app.models.manager import ModelManager
 
@@ -26,7 +27,7 @@ class ModelSelectorDialog(tk.Toplevel):
         _ = self.grab_set()
 
         apply_dark_titlebar(self)
-        _ = self.configure(bg="#1c1c1c")
+        _ = self.configure(bg=COLOR_BG_DARK)
 
         self.model_manager: ModelManager = model_manager
         self.selected_model_id: str = current_model_id

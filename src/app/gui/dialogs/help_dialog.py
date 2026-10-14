@@ -4,8 +4,10 @@ import webbrowser
 from tkinter import ttk
 from typing import final
 
+from app.core.constants import GITHUB_REPO_URL
 from app.core.i18n import get_translations
 from app.core.paths import get_app_data_dir
+from app.gui.styles import COLOR_BG_DARK, COLOR_BG_INPUT, COLOR_TEXT_LIGHT
 from app.gui.utils import apply_dark_titlebar
 
 
@@ -27,7 +29,7 @@ class HelpDialog(tk.Toplevel):
         _ = self.grab_set()
 
         apply_dark_titlebar(self)
-        _ = self.configure(bg="#1c1c1c")
+        _ = self.configure(bg=COLOR_BG_DARK)
 
         main_frame = ttk.Frame(self, padding=20)
         main_frame.pack(fill="both", expand=True)
@@ -58,7 +60,7 @@ class HelpDialog(tk.Toplevel):
         ttk.Button(
             btn_box,
             text="GitHub",
-            command=lambda: webbrowser.open("https://github.com/I1Kuz/bs-roformer-infer-gui"),
+            command=lambda: webbrowser.open(GITHUB_REPO_URL),
         ).pack(side="left", padx=(0, 8))
 
         ttk.Button(
@@ -90,8 +92,8 @@ class HelpDialog(tk.Toplevel):
         text_widget = tk.Text(
             tab_frame,
             wrap="word",
-            bg="#222222",
-            fg="#eaeaea",
+            bg=COLOR_BG_INPUT,
+            fg=COLOR_TEXT_LIGHT,
             insertbackground="white",
             relief="flat",
             borderwidth=0,

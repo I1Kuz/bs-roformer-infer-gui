@@ -27,7 +27,6 @@ _DETECT_SCRIPT = textwrap.dedent("""\
 """)
 
 
-
 @dataclass(slots=True)
 class HardwareInfo:
     cuda_available: bool = False

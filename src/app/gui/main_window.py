@@ -9,6 +9,7 @@ from tkinter import filedialog, messagebox, ttk
 from typing import Any, final
 
 from app.audio.scanner import SUPPORTED_AUDIO_PATTERNS, scan_audio_files
+from app.core.constants import GITHUB_REPO_URL
 from app.core.hardware import HardwareDetector
 from app.core.i18n import (
     LANGUAGE_DISPLAY_NAMES,
@@ -20,10 +21,23 @@ from app.core.logging import get_logger
 from app.core.paths import get_resources_dir
 from app.gui.dialogs.help_dialog import HelpDialog
 from app.gui.dialogs.model_selector import ModelSelectorDialog
-from app.gui.styles import apply_theme
+from app.gui.styles import (
+    COLOR_ACCENT_BLUE,
+    COLOR_BG_DARK,
+    COLOR_STATUS_SUCCESS,
+    COLOR_STATUS_WARNING,
+    COLOR_TEXT_MUTED,
+    apply_theme,
+)
 from app.gui.utils import apply_dark_titlebar
 from app.gui.widgets.queue_panel import QueuePanel
-from app.inference.job import CHUNK_PRESETS, Job, JobStatus
+from app.inference.job import (
+    CHUNK_PRESETS,
+    Job,
+    JobStatus,
+    get_chunk_preset_key,
+    get_chunk_preset_label,
+)
 from app.inference.protocol import AudioExportFormat, InferenceDevice
 from app.inference.queue_manager import QueueManager
 from app.models.manager import ModelManager, ModelMetadata
@@ -52,7 +66,7 @@ class MainWindow(tk.Tk):
 
         apply_dark_titlebar(self)
         apply_theme()
-        _ = self.configure(bg="#1c1c1c")
+        _ = self.configure(bg=COLOR_BG_DARK)
 
         self.model_manager = ModelManager()
         self.hardware = HardwareDetector()
@@ -192,7 +206,7 @@ class MainWindow(tk.Tk):
             top_actions_frame,
             text="GitHub",
             width=8,
-            command=lambda: webbrowser.open("https://github.com/I1Kuz/bs-roformer-infer-gui"),
+            command=lambda: webbrowser.open(GITHUB_REPO_URL),
         ).pack(side="left")
 
         # -------------------------------------------------------------
@@ -285,7 +299,7 @@ class MainWindow(tk.Tk):
             self.model_badges_frame,
             textvariable=self.badge_category_var,
             font=("TkDefaultFont", 9),
-            foreground="#58a6ff",
+            foreground=COLOR_ACCENT_BLUE,
         )
         self.badge_category_lbl.pack(side="left", padx=(0, 12))
 
@@ -294,7 +308,7 @@ class MainWindow(tk.Tk):
             self.model_badges_frame,
             textvariable=self.badge_stems_var,
             font=("TkDefaultFont", 9),
-            foreground="#8b949e",
+            foreground=COLOR_TEXT_MUTED,
         )
         self.badge_stems_lbl.pack(side="left", padx=(0, 12))
 
@@ -336,7 +350,8 @@ class MainWindow(tk.Tk):
 
         self.lbl_vram = ttk.Label(self.adv_frame, text=t.settings.vram_limit)
         self.lbl_vram.grid(row=0, column=2, sticky="w", pady=4, padx=15)
-        self.vram_var = tk.StringVar(value=str(self.settings.vram_limit))
+        vram_str = f"{self.settings.vram_limit:.1f}".rstrip("0").rstrip(".") if self.settings.vram_limit > 0 else "0"
+        self.vram_var = tk.StringVar(value=vram_str)
         vram_entry = ttk.Entry(self.adv_frame, textvariable=self.vram_var, width=10)
         vram_entry.grid(row=0, column=3, sticky="w", pady=4, padx=5)
         _ = vram_entry.bind("<FocusOut>", lambda _: self._save_settings())
@@ -344,7 +359,7 @@ class MainWindow(tk.Tk):
         # Grid row 1
         self.lbl_chunk = ttk.Label(self.adv_frame, text=t.settings.chunk_size)
         self.lbl_chunk.grid(row=1, column=0, sticky="w", pady=4, padx=5)
-        self.chunk_var = tk.StringVar(value=self.settings.chunk_size_preset)
+        self.chunk_var = tk.StringVar(value=get_chunk_preset_label(self.settings.chunk_size_preset))
         self.chunk_combo = ttk.Combobox(
             self.adv_frame, textvariable=self.chunk_var, state="readonly", width=22
         )
@@ -383,6 +398,7 @@ class MainWindow(tk.Tk):
             command=self._on_overlap_change,
         )
         self.overlap_scale.pack(side="left", fill="x", expand=True, padx=10)
+        _ = self.overlap_scale.bind("<ButtonRelease-1>", lambda _: self._save_settings())
 
         self.lbl_quality = ttk.Label(overlap_container, text=t.settings.quality, font=("TkDefaultFont", 8))
         self.lbl_quality.pack(side="left", padx=(0, 10))
@@ -479,14 +495,16 @@ class MainWindow(tk.Tk):
 
         options = [p.label for p in CHUNK_PRESETS if vram == 0 or p.min_vram_gb <= vram]
         self.chunk_combo["values"] = options
-        if self.settings.chunk_size_preset not in options:
+        curr_label = get_chunk_preset_label(self.settings.chunk_size_preset)
+        if curr_label not in options:
             self.settings.chunk_size_preset = "Auto"
             self.chunk_var.set("Auto")
+        else:
+            self.chunk_var.set(curr_label)
 
     def _on_overlap_change(self, val: str) -> None:
-        v = int(float(val))
+        v = round(float(val))
         self.overlap_var.set(v)
-        self._save_settings()
 
     def _browse_in(self) -> None:
         d = filedialog.askdirectory(initialdir=self.settings.input_folder)
@@ -530,17 +548,17 @@ class MainWindow(tk.Tk):
     def _save_settings(self) -> None:
         self.settings.create_subfolder_per_track = self.subfolder_var.get()
         self.settings.device = self.device_var.get()
-        self.settings.chunk_size_preset = self.chunk_var.get()
+        self.settings.chunk_size_preset = get_chunk_preset_key(self.chunk_var.get())
         self.settings.overlap = self.overlap_var.get()
         self.settings.export_format = self.format_var.get()
         try:
             old_limit = self.settings.vram_limit
-            new_limit = int(self.vram_var.get())
+            new_limit = max(0.0, float(self.vram_var.get()))
             self.settings.vram_limit = new_limit
             if old_limit != new_limit:
                 self._update_chunk_size_options()
         except ValueError:
-            self.settings.vram_limit = 0
+            self.settings.vram_limit = 0.0
             self.vram_var.set("0")
         self.settings_manager.save()
         self.queue_manager.settings = self.settings
@@ -570,10 +588,10 @@ class MainWindow(tk.Tk):
             self.badge_stems_var.set(f"{t.model.stems_prefix} {stems_str}")
             if model.installed:
                 self.badge_status_var.set(t.model.status_installed)
-                _ = self.badge_status_lbl.config(foreground="#3fb950")
+                _ = self.badge_status_lbl.config(foreground=COLOR_STATUS_SUCCESS)
             else:
                 self.badge_status_var.set(t.model.status_online)
-                _ = self.badge_status_lbl.config(foreground="#d29922")
+                _ = self.badge_status_lbl.config(foreground=COLOR_STATUS_WARNING)
         elif self.settings.selected_model:
             self.model_title_var.set(self.settings.selected_model)
             self.badge_category_var.set("")
@@ -681,14 +699,7 @@ class MainWindow(tk.Tk):
     def _update_start_button(self) -> None:
         t = get_translations()
         if self.queue_manager.is_running:
-            _ = self.btn_start.config(text=f"⏹ {t.queue.stop}")
-            try:
-                style = ttk.Style()
-                if not style.lookup("Red.TButton", "background"):
-                    _ = style.configure("Red.TButton", foreground="red")
-                _ = self.btn_start.config(style="Red.TButton")
-            except Exception:
-                pass
+            _ = self.btn_start.config(text=f"⏹ {t.queue.stop}", style="Red.TButton")
         else:
             _ = self.btn_start.config(text=f"▶ {t.queue.start_transform}", style="Accent.TButton")
             self.progress_bar.stop()

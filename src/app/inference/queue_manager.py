@@ -10,7 +10,7 @@ from app.core.i18n import get_translations
 from app.core.logging import get_logger
 from app.inference.engine import WorkerClient, WorkerEvent, WorkerResponse
 from app.inference.job import InferCommand, Job, JobStatus, LoadModelCommand
-from app.inference.protocol import ProgressType, RpcStatus, WorkerCommand, WorkerEvent as ProtocolEvent
+from app.inference.protocol import ProgressType, RpcStatus, WorkerCommand, WorkerEventType
 from app.storage.settings import AppSettings
 
 logger = get_logger(__name__)
@@ -36,7 +36,6 @@ class QueueManager:
 
         # Engine settings
         self.device: str = "auto"
-        self.backend: str = "torch"
         self.loaded_model_id: str | None = None
 
     def start(self) -> bool:
@@ -148,8 +147,7 @@ class QueueManager:
                 cmd = LoadModelCommand(
                     model_id=self.current_job.model_id,
                     device=self.device,
-                    backend=self.backend,
-                    vram_limit=float(self.settings.vram_limit),
+                    vram_limit=self.settings.vram_limit,
                 )
                 self.client.send_command(WorkerCommand.LOAD, cmd, self._on_model_load_response)
             else:
@@ -228,17 +226,17 @@ class QueueManager:
                 self._schedule_ui_update(self.current_job)
                 self.loaded_model_id = None
                 self._job_finished_locked()
-            elif event_type == ProtocolEvent.MODEL_LOADING:
+            elif event_type == WorkerEventType.MODEL_LOADING:
                 self.current_job.status_text = t.status.downloading_model
                 self._schedule_ui_update(self.current_job)
-            elif event_type == ProtocolEvent.MODEL_LOADED:
+            elif event_type == WorkerEventType.MODEL_LOADED:
                 self.current_job.status_text = None
                 self.current_job.status = JobStatus.PROCESSING
                 self._schedule_ui_update(self.current_job)
-            elif event_type == ProtocolEvent.INFER_START:
+            elif event_type == WorkerEventType.INFER_START:
                 self.current_job.status_text = t.status.transforming
                 self._schedule_ui_update(self.current_job)
-            elif event_type == ProtocolEvent.PROGRESS:
+            elif event_type == WorkerEventType.PROGRESS:
                 prog_val = float(payload.get("progress", 0.0))  # type: ignore[arg-type]
                 text_val = str(payload.get("text", ""))
                 prog_type = str(payload.get("type", ProgressType.UNKNOWN.value))
@@ -255,7 +253,7 @@ class QueueManager:
                     self.current_job.progress_str = f"{int(prog_val * 100)}%"
 
                 self._schedule_ui_update(self.current_job)
-            elif event_type == ProtocolEvent.PROGRESS_TEXT:
+            elif event_type == WorkerEventType.PROGRESS_TEXT:
                 text = str(payload.get("text", ""))
                 if "Loading audio" in text:
                     self.current_job.status_text = t.status.starting
@@ -263,7 +261,7 @@ class QueueManager:
                     self.current_job.status_text = text
                 logger.info("Job status update: %s", text)
                 self._schedule_ui_update(self.current_job)
-            elif event_type == ProtocolEvent.INFER_DONE:
+            elif event_type == WorkerEventType.INFER_DONE:
                 pass
 
     def _schedule_ui_update(self, job: Job) -> None:

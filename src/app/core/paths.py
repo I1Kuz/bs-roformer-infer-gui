@@ -2,6 +2,8 @@ import os
 import sys
 from pathlib import Path
 
+from app.core.constants import APP_DATA_DIRNAME
+
 
 def get_app_data_dir() -> Path:
     """Returns the writable application data directory.
@@ -11,9 +13,8 @@ def get_app_data_dir() -> Path:
     """
     local_app_data = os.environ.get("LOCALAPPDATA")
     if local_app_data:
-        return Path(local_app_data) / "BSRoFormer Studio"
+        return Path(local_app_data) / APP_DATA_DIRNAME
     return Path.home() / ".bsroformer_studio"
-
 
 
 def get_models_dir() -> Path:
@@ -28,14 +29,6 @@ def get_logs_dir() -> Path:
     return get_app_data_dir() / "logs"
 
 
-def get_temp_dir() -> Path:
-    return get_app_data_dir() / "temp"
-
-
-def get_history_dir() -> Path:
-    return get_app_data_dir() / "history"
-
-
 def ensure_directories() -> None:
     """Creates all necessary writable directories."""
     dirs = [
@@ -43,8 +36,6 @@ def ensure_directories() -> None:
         get_models_dir(),
         get_settings_dir(),
         get_logs_dir(),
-        get_temp_dir(),
-        get_history_dir(),
     ]
     for d in dirs:
         d.mkdir(parents=True, exist_ok=True)

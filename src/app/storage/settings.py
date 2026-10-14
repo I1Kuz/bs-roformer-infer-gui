@@ -16,14 +16,12 @@ class AppSettings:
     output_folder: str = ""
     create_subfolder_per_track: bool = False
     device: str = InferenceDevice.AUTO.value
-    vram_limit: int = 0
+    vram_limit: float = 0.0
     selected_model: str = ""
     chunk_size_preset: str = "Auto"
     overlap: int = 4
     export_format: str = AudioExportFormat.WAV_32_FLOAT.value
-    backend: str = "torch"
     overwrite_existing: bool = False
-    theme: str = "dark"
     language: str = "en"
 
 
@@ -47,9 +45,10 @@ class SettingsManager:
                         if field.name not in raw_dict:
                             continue
                         val = raw_dict[field.name]
-                        # Strict type check (not isinstance) to avoid the
-                        # bool-is-subclass-of-int trap.
-                        if type(val) is type(getattr(defaults, field.name)):
+                        def_val = getattr(defaults, field.name)
+                        if isinstance(def_val, float) and isinstance(val, (int, float)):
+                            object.__setattr__(self.settings, field.name, float(val))
+                        elif type(val) is type(def_val):
                             object.__setattr__(self.settings, field.name, val)
 
                 logger.info("Settings loaded successfully")

@@ -4,11 +4,10 @@ from enum import StrEnum
 class WorkerCommand(StrEnum):
     LOAD = "load"
     INFER = "infer"
-    RELEASE = "release"
     EXIT = "exit"
 
 
-class WorkerEvent(StrEnum):
+class WorkerEventType(StrEnum):
     MODEL_LOADING = "model_loading"
     MODEL_LOADED = "model_loaded"
     INFER_START = "infer_start"
@@ -32,7 +31,6 @@ class InferenceDevice(StrEnum):
     AUTO = "auto"
     CPU = "cpu"
     CUDA = "cuda"
-    MPS = "mps"
 
 
 class AudioExportFormat(StrEnum):

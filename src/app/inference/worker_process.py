@@ -26,7 +26,7 @@ from app.inference.protocol import (
     ProgressType,
     RpcStatus,
     WorkerCommand,
-    WorkerEvent,
+    WorkerEventType,
 )
 
 # Ensure ffmpeg.exe (which sits next to python.exe) is in PATH
@@ -161,7 +161,7 @@ class ProgressStream:
         if m:
             val = float(m.group(1)) / 100.0
             self._send(
-                WorkerEvent.PROGRESS.value,
+                WorkerEventType.PROGRESS.value,
                 {"progress": val, "text": f"{int(val * 100)}%", "type": ProgressType.DOWNLOAD.value},
             )
             return
@@ -171,7 +171,7 @@ class ProgressStream:
             if m_time:
                 self.total_time = float(m_time.group(1))
                 self._send(
-                    WorkerEvent.PROGRESS.value,
+                    WorkerEventType.PROGRESS.value,
                     {"progress": 0.0, "text": "Starting...", "type": ProgressType.TRANSFORM.value},
                 )
             return
@@ -186,13 +186,13 @@ class ProgressStream:
                 else:
                     time_str = f"{rem:.1f}s left"
                 self._send(
-                    WorkerEvent.PROGRESS.value,
+                    WorkerEventType.PROGRESS.value,
                     {"progress": val, "text": time_str, "type": ProgressType.TRANSFORM.value},
                 )
             return
 
-        if "Estimated" in line or "processing" in line:
-            self._send(WorkerEvent.PROGRESS_TEXT.value, {"text": line})
+        if re.search(r"processing\s+(?:chunk|segment|track)", line, re.IGNORECASE):
+            self._send(WorkerEventType.PROGRESS_TEXT.value, {"text": line})
 
     def flush(self) -> None:
         _ = self.original_stream.flush()
@@ -286,7 +286,7 @@ def _handle_load(req: dict[str, Any], real_stdout: Any, session: SessionState) -
                     import logging
                     logging.getLogger("worker").error("Failed to set VRAM limit: %s", e)
 
-        _send(real_stdout, WorkerEvent.MODEL_LOADING.value, {"model_id": model_id})
+        _send(real_stdout, WorkerEventType.MODEL_LOADING.value, {"model_id": model_id})
 
         ckpt_path, config_path = ensure_model_assets(model_id)
 
@@ -296,7 +296,11 @@ def _handle_load(req: dict[str, Any], real_stdout: Any, session: SessionState) -
         model = get_model_from_config("bs_roformer", config)
 
         try:
-            _ = model.load_state_dict(torch.load(ckpt_path, map_location=torch.device("cpu"), weights_only=False))
+            try:
+                state_dict = torch.load(ckpt_path, map_location=torch.device("cpu"), weights_only=True)
+            except Exception:
+                state_dict = torch.load(ckpt_path, map_location=torch.device("cpu"), weights_only=False)
+            _ = model.load_state_dict(state_dict)
         except Exception as load_err:
             err_str = str(load_err).lower()
             if "zip archive" in err_str or "corrupt" in err_str or "invalid" in err_str:
@@ -322,14 +326,14 @@ def _handle_load(req: dict[str, Any], real_stdout: Any, session: SessionState) -
         session.device = torch_device
         session.vram_limit = vram_limit
 
-        _send(real_stdout, WorkerEvent.MODEL_LOADED.value, {"model_id": model_id, "status": RpcStatus.SUCCESS.value})
+        _send(real_stdout, WorkerEventType.MODEL_LOADED.value, {"model_id": model_id, "status": RpcStatus.SUCCESS.value})
         _reply(real_stdout, req_id, RpcStatus.SUCCESS.value)
 
     except Exception as e:
         err_msg = str(e)
         import logging
         logging.getLogger("worker").error("%s", traceback.format_exc())
-        _send(real_stdout, WorkerEvent.MODEL_LOADED.value, {"model_id": model_id, "status": RpcStatus.ERROR.value, "error": err_msg})
+        _send(real_stdout, WorkerEventType.MODEL_LOADED.value, {"model_id": model_id, "status": RpcStatus.ERROR.value, "error": err_msg})
         _reply(real_stdout, req_id, RpcStatus.ERROR.value, error=err_msg)
 
 
@@ -373,8 +377,8 @@ def _handle_infer(req: dict[str, Any], real_stdout: Any, session: SessionState) 
 
         overwrite: bool = bool(req.get("overwrite_existing", True))
 
-        _send(real_stdout, WorkerEvent.INFER_START.value, {"input_file": str(input_file)})
-        _send(real_stdout, WorkerEvent.PROGRESS_TEXT.value, {"text": f"Loading audio {input_file.name} into memory..."})
+        _send(real_stdout, WorkerEventType.INFER_START.value, {"input_file": str(input_file)})
+        _send(real_stdout, WorkerEventType.PROGRESS_TEXT.value, {"text": f"Loading audio {input_file.name} into memory..."})
 
         store_dir.mkdir(parents=True, exist_ok=True)
 
@@ -461,31 +465,15 @@ def _handle_infer(req: dict[str, Any], real_stdout: Any, session: SessionState) 
                 instrumental = instrumental[:, 0]
             save_track(instrumental, "instrumental")
 
-        _send(real_stdout, WorkerEvent.INFER_DONE.value, {"input_file": str(input_file), "status": RpcStatus.SUCCESS.value})
+        _send(real_stdout, WorkerEventType.INFER_DONE.value, {"input_file": str(input_file), "status": RpcStatus.SUCCESS.value})
         _reply(real_stdout, req_id, RpcStatus.SUCCESS.value)
 
     except Exception as e:
         err_msg = str(e)
         import logging
         logging.getLogger("worker").error("%s", traceback.format_exc())
-        _send(real_stdout, WorkerEvent.INFER_DONE.value, {"input_file": str(input_file), "status": RpcStatus.ERROR.value, "error": err_msg})
+        _send(real_stdout, WorkerEventType.INFER_DONE.value, {"input_file": str(input_file), "status": RpcStatus.ERROR.value, "error": err_msg})
         _reply(real_stdout, req_id, RpcStatus.ERROR.value, error=err_msg)
-
-
-def _handle_release(req: dict[str, Any], real_stdout: Any, session: SessionState) -> None:
-    import torch
-
-    req_id = req.get("id")
-    session.model = None
-    session.config = None
-    session.device = None
-    session.vram_limit = 0.0
-    try:
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-    except Exception:
-        pass
-    _reply(real_stdout, req_id, RpcStatus.SUCCESS.value)
 
 
 # ---------------------------------------------------------------------------
@@ -551,8 +539,6 @@ def handle_serve() -> None:
         elif cmd == WorkerCommand.INFER:
             logger.debug("Received infer command: %s", req)
             _handle_infer(req, real_stdout, session)
-        elif cmd == WorkerCommand.RELEASE:
-            _handle_release(req, real_stdout, session)
         elif cmd == WorkerCommand.EXIT:
             sys.exit(0)
 
